@@ -6,11 +6,12 @@ carton, sans perdre de temps à chercher.
 
 ## Ce que fait l'application
 
-- **Créer des codes-barres** pour les cartons (référence automatique `CTN-000001` ou référence libre)
-  et pour les emplacements (à l'unité ou en série : `A-01-1`, `A-01-2`…).
+- **Fiches produit** : chaque carton a une référence et un nom de produit, affichés quand on scanne
+  son code-barres (généré automatiquement, ou code déjà présent sur le carton).
+- **Emplacements** créés à l'unité ou en série (`A-01-1`, `A-01-2`…), avec une couleur de repérage.
 - **Imprimer les étiquettes** sur une étiqueteuse, au format du rouleau (40 × 30, 50 × 30, 62 × 29,
   100 × 50, 100 × 150 mm ou sur mesure), une étiquette par page.
-- **Scanner** avec la caméra du téléphone ou avec n'importe quelle douchette / terminal d'entrepôt
+- **Scanner** avec la caméra du téléphone (lecture confirmée avant validation) ou avec n'importe quelle douchette / terminal d'entrepôt
   en mode clavier (Bluetooth ou USB).
 - **Ranger** : scanner un carton puis son emplacement, ou un emplacement puis tous les cartons à y
   mettre.

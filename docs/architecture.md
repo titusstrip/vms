@@ -22,8 +22,9 @@ l'état reste inchangé.
 
 ## Modèle de données
 
-- **Emplacement** : `code`, `label`.
-- **Carton** : `code` (référence), `description`, `quantity`, `locationCode` (ou `null` si non rangé).
+- **Emplacement** : `code`, `label`, `color` (clé de la palette `LOCATION_COLORS`, ou `null`).
+- **Carton** (fiche produit) : `code` (valeur du code-barres), `reference` (référence produit,
+  affichée en priorité), `name`, `quantity`, `locationCode` (ou `null` si non rangé).
 - **Mouvement** : `cartonCode`, `from`, `to`, `at` — les 1000 derniers sont conservés.
 
 Le code sert d'identifiant et il est unique tous types confondus : un scan désigne donc sans
@@ -45,7 +46,12 @@ douchettes et par la caméra. La même géométrie de barres sert à l'aperçu �
   série) jusqu'à « Terminer » ;
 - code inconnu → proposition de créer un carton ou un emplacement avec ce code.
 
-La caméra et la douchette alimentent la même fonction `handleScan`. Une douchette en mode clavier
+Les lectures de la caméra passent d'abord par `domain/scanStabilizer.ts` : un code n'est validé
+qu'après plusieurs lectures identiques rapprochées (3 pour un code connu, 6 pour un code inconnu),
+puis la lecture est suspendue 1,5 s et le même code n'est pas relu tant qu'il reste dans le champ.
+Cela élimine les lectures fantômes et les hésitations entre plusieurs codes-barres visibles.
+
+La caméra et la douchette alimentent ensuite la même fonction `handleScan`. Une douchette en mode clavier
 tape le code dans le champ de saisie puis envoie « Entrée » ; le champ garde le focus pour enchaîner.
 
 ## Impression

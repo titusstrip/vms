@@ -7,8 +7,10 @@ import {
   addCarton,
   addLocation,
   addLocationSeries,
+  cartonTitle,
   cartonsAt,
   createEmptyState,
+  findCartonByReference,
   moveCarton,
   movementsOf,
   nextCartonCode,
@@ -19,6 +21,7 @@ import {
   searchCartons,
   serializeState,
   updateCarton,
+  updateLocation,
   validateCode,
 } from './inventory';
 import { DomainError } from './types';
@@ -30,7 +33,7 @@ function seeded() {
   let state = createEmptyState();
   state = addLocation(state, { code: 'a-01-1', label: 'Fond gauche' }, NOW);
   state = addLocation(state, { code: 'A-01-2' }, NOW);
-  state = addCarton(state, { code: 'ctn-000001', description: 'Câbles HDMI', quantity: 20 }, NOW);
+  state = addCarton(state, { code: 'ctn-000001', reference: 'hdmi-2m', name: 'Câbles HDMI', quantity: 20 }, NOW);
   return state;
 }
 
@@ -103,15 +106,15 @@ describe('cartons', () => {
     assert.equal(nextCartonCode(seeded()), 'CTN-000002');
   });
 
-  it('met à jour description et quantité, refuse une quantité négative', () => {
-    const state = updateCarton(seeded(), 'CTN-000001', { description: ' Câbles ', quantity: null }, LATER);
-    assert.partialDeepStrictEqual(state.cartons['CTN-000001'], { description: 'Câbles', quantity: null });
+  it('met à jour nom et quantité, refuse une quantité négative', () => {
+    const state = updateCarton(seeded(), 'CTN-000001', { name: ' Câbles ', quantity: null }, LATER);
+    assert.partialDeepStrictEqual(state.cartons['CTN-000001'], { name: 'Câbles', quantity: null });
     assert.throws(() => updateCarton(state, 'CTN-000001', { quantity: -1 }, LATER), DomainError);
   });
 
   it('tronque les textes trop longs', () => {
-    const state = addCarton(seeded(), { code: 'X1', description: 'x'.repeat(500) }, NOW);
-    assert.equal(state.cartons.X1.description.length, MAX_TEXT_LENGTH);
+    const state = addCarton(seeded(), { code: 'X1', name: 'x'.repeat(500) }, NOW);
+    assert.equal(state.cartons.X1.name.length, MAX_TEXT_LENGTH);
   });
 
   it('supprime un carton et son historique', () => {
@@ -121,12 +124,52 @@ describe('cartons', () => {
     assert.equal(state.movements.length, 0);
   });
 
-  it('recherche par référence, description ou emplacement', () => {
+  it('recherche par référence, nom ou emplacement', () => {
     const state = moveCarton(seeded(), 'CTN-000001', 'A-01-1', NOW);
     assert.equal(searchCartons(state, 'hdmi').length, 1);
     assert.equal(searchCartons(state, 'a-01').length, 1);
     assert.equal(searchCartons(state, 'hdmi a-02').length, 0);
     assert.equal(searchCartons(state, '').length, 1);
+  });
+});
+
+describe('fiche produit et couleurs', () => {
+  it('retrouve un carton par sa référence produit, sans tenir compte de la casse', () => {
+    const state = seeded();
+    assert.equal(findCartonByReference(state, ' HDMI-2M ')?.code, 'CTN-000001');
+    assert.equal(findCartonByReference(state, 'inconnue'), null);
+    assert.equal(cartonTitle(state.cartons['CTN-000001']), 'hdmi-2m');
+    assert.equal(searchCartons(state, 'hdmi-2').length, 1);
+  });
+
+  it('ne tranche pas quand deux cartons partagent la même référence', () => {
+    const state = addCarton(seeded(), { code: 'CTN-2', reference: 'HDMI-2M' }, NOW);
+    assert.equal(findCartonByReference(state, 'hdmi-2m'), null);
+  });
+
+  it('attribue une couleur aux emplacements, à l’unité, en série ou après coup', () => {
+    let state = addLocation(createEmptyState(), { code: 'B-1', color: 'blue' }, NOW);
+    assert.equal(state.locations['B-1'].color, 'blue');
+    state = addLocationSeries(state, { aisle: 'C', bays: 1, levels: 2, color: 'green' }, NOW).state;
+    assert.equal(state.locations['C-01-2'].color, 'green');
+    state = updateLocation(state, 'B-1', { color: null, label: ' Quai ' });
+    assert.partialDeepStrictEqual(state.locations['B-1'], { color: null, label: 'Quai' });
+  });
+
+  it('relit les anciennes sauvegardes (nom dans « description », pas de couleur)', () => {
+    const old = JSON.stringify({
+      version: 1,
+      locations: { 'A-1': { code: 'A-1', label: '', createdAt: NOW } },
+      cartons: { 'CTN-1': { code: 'CTN-1', description: 'Vis M4', quantity: 3, locationCode: 'A-1' } },
+    });
+    const state = parseState(old);
+    assert.partialDeepStrictEqual(state.cartons['CTN-1'], { name: 'Vis M4', reference: '' });
+    assert.equal(state.locations['A-1'].color, null);
+  });
+
+  it('ignore une couleur inconnue dans une sauvegarde', () => {
+    const bad = JSON.stringify({ version: 1, cartons: {}, locations: { a: { code: 'A-1', color: 'javascript:1' } } });
+    assert.equal(parseState(bad).locations['A-1'].color, null);
   });
 });
 
@@ -163,10 +206,10 @@ describe('sauvegarde', () => {
     }).replace('"PROTO_KEY"', '"__proto__"');
     const state = parseState(hostile);
     assert.deepEqual(Object.keys(state.locations), ['A-01-1']);
-    assert.deepEqual(Object.keys(state.locations['A-01-1']).sort(), ['code', 'createdAt', 'label']);
+    assert.deepEqual(Object.keys(state.locations['A-01-1']).sort(), ['code', 'color', 'createdAt', 'label']);
     assert.equal(state.locations['A-01-1'].label, '');
     assert.equal(Object.getPrototypeOf(state.cartons), Object.prototype);
-    assert.equal(state.cartons['CTN-1'].description.length, MAX_TEXT_LENGTH);
+    assert.equal(state.cartons['CTN-1'].name.length, MAX_TEXT_LENGTH);
     assert.equal(state.cartons['CTN-1'].quantity, null);
     assert.equal(state.cartons['CTN-1'].locationCode, 'A-01-1');
     assert.equal(state.movements.length, 1);

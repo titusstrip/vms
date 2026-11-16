@@ -8,8 +8,10 @@ import {
   DomainError,
   InventoryState,
   LabelSettings,
+  LocationColor,
   Movement,
   StorageLocation,
+  isLocationColor,
 } from './types';
 
 export const MAX_MOVEMENTS = 1000;
@@ -60,6 +62,10 @@ function assertCodeIsFree(state: InventoryState, code: string): void {
   }
 }
 
+function cleanInput(text: string | undefined): string {
+  return (text ?? '').trim().slice(0, MAX_TEXT_LENGTH);
+}
+
 function parseQuantity(quantity: number | null | undefined): number | null {
   if (quantity === null || quantity === undefined) {
     return null;
@@ -74,13 +80,35 @@ function parseQuantity(quantity: number | null | undefined): number | null {
 
 export function addLocation(
   state: InventoryState,
-  input: { code: string; label?: string },
+  input: { code: string; label?: string; color?: LocationColor | null },
   now: string,
 ): InventoryState {
   const code = validateCode(input.code);
   assertCodeIsFree(state, code);
-  const location: StorageLocation = { code, label: (input.label ?? '').trim().slice(0, MAX_TEXT_LENGTH), createdAt: now };
+  const location: StorageLocation = {
+    code,
+    label: cleanInput(input.label),
+    color: input.color ?? null,
+    createdAt: now,
+  };
   return { ...state, locations: { ...state.locations, [code]: location } };
+}
+
+export function updateLocation(
+  state: InventoryState,
+  code: string,
+  changes: { label?: string; color?: LocationColor | null },
+): InventoryState {
+  const location = state.locations[code];
+  if (!location) {
+    throw new DomainError(`Emplacement « ${code} » introuvable.`);
+  }
+  const updated: StorageLocation = {
+    ...location,
+    label: changes.label !== undefined ? cleanInput(changes.label) : location.label,
+    color: changes.color !== undefined ? changes.color : location.color,
+  };
+  return { ...state, locations: { ...state.locations, [code]: updated } };
 }
 
 export interface LocationSeriesInput {
@@ -90,6 +118,8 @@ export interface LocationSeriesInput {
   bays: number;
   /** Nombre de niveaux par travée. */
   levels: number;
+  /** Couleur commune à toute la série. */
+  color?: LocationColor | null;
 }
 
 /** Codes d'une série d'emplacements, ex. A-01-1, A-01-2, A-02-1… */
@@ -123,7 +153,7 @@ export function addLocationSeries(
     if (next.locations[code]) {
       continue;
     }
-    next = addLocation(next, { code }, now);
+    next = addLocation(next, { code, color: input.color }, now);
     created.push(code);
   }
   return { state: next, created };
@@ -147,7 +177,8 @@ export function removeLocation(state: InventoryState, code: string, now: string)
 
 export interface CartonInput {
   code: string;
-  description?: string;
+  reference?: string;
+  name?: string;
   quantity?: number | null;
   locationCode?: string | null;
 }
@@ -157,7 +188,8 @@ export function addCarton(state: InventoryState, input: CartonInput, now: string
   assertCodeIsFree(state, code);
   const carton: Carton = {
     code,
-    description: (input.description ?? '').trim().slice(0, MAX_TEXT_LENGTH),
+    reference: cleanInput(input.reference),
+    name: cleanInput(input.name),
     quantity: parseQuantity(input.quantity),
     locationCode: null,
     createdAt: now,
@@ -171,7 +203,7 @@ export function addCarton(state: InventoryState, input: CartonInput, now: string
 export function updateCarton(
   state: InventoryState,
   code: string,
-  changes: { description?: string; quantity?: number | null },
+  changes: { reference?: string; name?: string; quantity?: number | null },
   now: string,
 ): InventoryState {
   const carton = state.cartons[code];
@@ -180,9 +212,8 @@ export function updateCarton(
   }
   const updated: Carton = {
     ...carton,
-    description: changes.description !== undefined
-        ? changes.description.trim().slice(0, MAX_TEXT_LENGTH)
-        : carton.description,
+    reference: changes.reference !== undefined ? cleanInput(changes.reference) : carton.reference,
+    name: changes.name !== undefined ? cleanInput(changes.name) : carton.name,
     quantity: changes.quantity !== undefined ? parseQuantity(changes.quantity) : carton.quantity,
     updatedAt: now,
   };
@@ -262,12 +293,27 @@ export function cartonsAt(state: InventoryState, locationCode: string): Carton[]
     .sort(byCode);
 }
 
-/** Recherche dans la référence, la description et l'emplacement. */
+/** Ce qu'on affiche pour désigner un carton : sa référence produit, sinon son code-barres. */
+export function cartonTitle(carton: Carton): string {
+  return carton.reference || carton.code;
+}
+
+/** Carton dont la référence produit correspond exactement, s'il est unique. */
+export function findCartonByReference(state: InventoryState, raw: string): Carton | null {
+  const wanted = normalizeCode(raw);
+  if (!wanted) {
+    return null;
+  }
+  const matches = Object.values(state.cartons).filter((carton) => normalizeCode(carton.reference) === wanted);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+/** Recherche dans la référence, le nom, le code-barres et l'emplacement. */
 export function searchCartons(state: InventoryState, query: string): Carton[] {
   const terms = query.toUpperCase().split(/\s+/).filter(Boolean);
   return Object.values(state.cartons)
     .filter((carton) => {
-      const haystack = `${carton.code} ${carton.description} ${carton.locationCode ?? ''}`.toUpperCase();
+      const haystack = `${carton.code} ${carton.reference} ${carton.name} ${carton.locationCode ?? ''}`.toUpperCase();
       return terms.every((term) => haystack.includes(term));
     })
     .sort(byCode);
@@ -349,7 +395,12 @@ export function parseState(json: string): InventoryState {
       throw new DomainError(INVALID_BACKUP);
     }
     const code = validateCode(raw.code);
-    locations[code] = { code, label: cleanText(raw.label), createdAt: cleanDate(raw.createdAt, epoch) };
+    locations[code] = {
+      code,
+      label: cleanText(raw.label),
+      color: isLocationColor(raw.color) ? raw.color : null,
+      createdAt: cleanDate(raw.createdAt, epoch),
+    };
   }
 
   const cartons: Record<string, Carton> = {};
@@ -366,7 +417,9 @@ export function parseState(json: string): InventoryState {
     const createdAt = cleanDate(raw.createdAt, epoch);
     cartons[code] = {
       code,
-      description: cleanText(raw.description),
+      reference: cleanText(raw.reference),
+      // Les premières sauvegardes rangeaient le nom du produit dans « description ».
+      name: cleanText(raw.name ?? raw.description),
       quantity:
         typeof raw.quantity === 'number' && Number.isFinite(raw.quantity) && raw.quantity >= 0
           ? raw.quantity

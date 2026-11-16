@@ -3,11 +3,9 @@ import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
-  addCarton,
+  cartonTitle,
   moveCarton,
   movementsOf,
-  nextCartonCode,
-  normalizeCode,
   removeCarton,
   searchCartons,
   updateCarton,
@@ -17,10 +15,12 @@ import { Carton } from '../domain/types';
 import { useInventory } from '../state/InventoryContext';
 import { Barcode } from '../ui/Barcode';
 import { LabelActions } from '../ui/LabelActions';
-import { Badge, Button, EmptyState, ErrorText, Field, SearchInput, SectionTitle, Sheet } from '../ui/components';
+import { Button, EmptyState, ErrorText, Field, SearchInput, SectionTitle, Sheet } from '../ui/components';
 import { confirm, errorMessage } from '../ui/dialogs';
 import { describeMovement, formatDateTime, parseNumberInput } from '../ui/format';
+import { LocationTag } from '../ui/locationColors';
 import { colors, radius, spacing } from '../ui/theme';
+import { CartonForm } from './CartonForm';
 
 export function CartonsScreen() {
   const { state } = useInventory();
@@ -37,7 +37,7 @@ export function CartonsScreen() {
       <View style={styles.toolbar}>
         <SearchInput
           accessibilityLabel="Rechercher un carton"
-          placeholder="Rechercher : référence, contenu, emplacement"
+          placeholder="Rechercher : référence, nom, emplacement"
           value={query}
           onChangeText={setQuery}
         />
@@ -54,7 +54,7 @@ export function CartonsScreen() {
           total === 0 ? (
             <EmptyState
               title="Aucun carton"
-              message="Créez un carton, imprimez son étiquette, puis scannez-le avec son emplacement pour le ranger."
+              message="Créez la fiche d'un carton (référence et nom du produit), imprimez son étiquette, puis scannez-le avec son emplacement pour le ranger."
             />
           ) : (
             <EmptyState title="Aucun résultat" message="Aucun carton ne correspond à cette recherche." />
@@ -73,7 +73,7 @@ export function CartonsScreen() {
       {/* Une seule fenêtre pour le formulaire puis la fiche : pas de modales superposées. */}
       <Sheet
         visible={creating || Boolean(openCarton)}
-        title={creating ? 'Nouveau carton' : (openCarton?.code ?? '')}
+        title={creating ? 'Nouveau carton' : openCarton ? cartonTitle(openCarton) : ''}
         onClose={() => {
           setCreating(false);
           setOpenCode(null);
@@ -95,87 +95,34 @@ export function CartonsScreen() {
 }
 
 function CartonRow({ carton, onPress }: { carton: Carton; onPress: () => void }) {
+  const { state } = useInventory();
+  const location = carton.locationCode ? state.locations[carton.locationCode] : undefined;
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.row}>
       <View style={styles.rowMain}>
-        <Text style={styles.rowCode}>{carton.code}</Text>
-        {carton.description ? (
+        <Text style={styles.rowCode}>{cartonTitle(carton)}</Text>
+        {carton.name ? (
           <Text style={styles.rowText} numberOfLines={1}>
-            {carton.description}
+            {carton.name}
           </Text>
         ) : null}
       </View>
-      {carton.locationCode ? (
-        <Badge label={carton.locationCode} tone="success" />
-      ) : (
-        <Badge label="Non rangé" tone="warning" />
-      )}
+      <LocationTag code={carton.locationCode} location={location} />
     </Pressable>
-  );
-}
-
-function CartonForm({ onCreated }: { onCreated: (code: string) => void }) {
-  const { state, apply } = useInventory();
-  const [code, setCode] = useState(() => nextCartonCode(state));
-  const [description, setDescription] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [locationCode, setLocationCode] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = () => {
-    try {
-      const now = new Date().toISOString();
-      apply((current) =>
-        addCarton(current, { code, description, quantity: parseNumberInput(quantity), locationCode }, now),
-      );
-      onCreated(normalizeCode(code));
-    } catch (caught) {
-      setError(errorMessage(caught));
-    }
-  };
-
-  return (
-    <>
-      <Field
-        label="Référence"
-        hint="Proposée automatiquement ; vous pouvez saisir ou scanner la vôtre."
-        value={code}
-        onChangeText={setCode}
-        autoCapitalize="characters"
-      />
-      <Field
-        label="Contenu"
-        placeholder="Ex. Câbles HDMI 2 m"
-        value={description}
-        onChangeText={setDescription}
-      />
-      <Field
-        label="Quantité (facultatif)"
-        value={quantity}
-        onChangeText={setQuantity}
-        keyboardType="numeric"
-      />
-      <Field
-        label="Emplacement (facultatif)"
-        hint="Laissez vide pour ranger le carton plus tard en le scannant."
-        value={locationCode}
-        onChangeText={setLocationCode}
-        autoCapitalize="characters"
-      />
-      <ErrorText message={error} />
-      <Button label="Créer le carton" onPress={submit} />
-    </>
   );
 }
 
 function CartonDetail({ carton, onDeleted }: { carton: Carton; onDeleted: () => void }) {
   const { state, apply } = useInventory();
-  const [description, setDescription] = useState(carton.description);
+  const [reference, setReference] = useState(carton.reference);
+  const [name, setName] = useState(carton.name);
   const [quantity, setQuantity] = useState(carton.quantity === null ? '' : String(carton.quantity));
   const [error, setError] = useState<string | null>(null);
   const movements = movementsOf(state, carton.code);
   const changed =
-    description.trim() !== carton.description || parseNumberInput(quantity) !== carton.quantity;
+    reference.trim() !== carton.reference ||
+    name.trim() !== carton.name ||
+    parseNumberInput(quantity) !== carton.quantity;
 
   const run = (change: Parameters<typeof apply>[0]) => {
     setError(null);
@@ -191,13 +138,13 @@ function CartonDetail({ carton, onDeleted }: { carton: Carton; onDeleted: () => 
       updateCarton(
         current,
         carton.code,
-        { description, quantity: parseNumberInput(quantity) },
+        { reference, name, quantity: parseNumberInput(quantity) },
         new Date().toISOString(),
       ),
     );
 
   const remove = async () => {
-    if (await confirm('Supprimer ce carton ?', `${carton.code} et son historique seront supprimés.`, 'Supprimer')) {
+    if (await confirm('Supprimer ce carton ?', `${cartonTitle(carton)} et son historique seront supprimés.`, 'Supprimer')) {
       onDeleted();
       run((current) => removeCarton(current, carton.code));
     }
@@ -209,9 +156,13 @@ function CartonDetail({ carton, onDeleted }: { carton: Carton; onDeleted: () => 
       <LabelActions items={[cartonLabel(carton)]} />
 
       <View style={styles.locationBox}>
-        <View style={styles.rowMain}>
+        <View style={[styles.rowMain, styles.locationMain]}>
           <SectionTitle>Emplacement</SectionTitle>
-          <Text style={styles.locationCode}>{carton.locationCode ?? 'Non rangé'}</Text>
+          <LocationTag
+            code={carton.locationCode}
+            location={carton.locationCode ? state.locations[carton.locationCode] : undefined}
+            large
+          />
           {carton.locationCode && state.locations[carton.locationCode]?.label ? (
             <Text style={styles.rowText}>{state.locations[carton.locationCode].label}</Text>
           ) : null}
@@ -226,7 +177,13 @@ function CartonDetail({ carton, onDeleted }: { carton: Carton; onDeleted: () => 
         ) : null}
       </View>
 
-      <Field label="Contenu" value={description} onChangeText={setDescription} />
+      <Field
+        label="Référence produit"
+        value={reference}
+        onChangeText={setReference}
+        autoCapitalize="characters"
+      />
+      <Field label="Nom du produit" value={name} onChangeText={setName} />
       <Field label="Quantité" value={quantity} onChangeText={setQuantity} keyboardType="numeric" />
       <ErrorText message={error} />
       {changed ? <Button label="Enregistrer" onPress={save} /> : null}
@@ -263,6 +220,7 @@ const styles = StyleSheet.create({
     minHeight: 60,
   },
   rowMain: { flex: 1, gap: 2 },
+  locationMain: { gap: spacing.sm },
   rowCode: { fontSize: 17, fontWeight: '700', color: colors.text },
   rowText: { fontSize: 15, color: colors.muted },
   locationBox: {
@@ -275,6 +233,5 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
   },
-  locationCode: { fontSize: 24, fontWeight: '800', color: colors.text },
   history: { gap: spacing.xs },
 });

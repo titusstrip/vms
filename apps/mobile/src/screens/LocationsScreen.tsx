@@ -8,16 +8,19 @@ import {
   cartonsAt,
   locationSeriesCodes,
   normalizeCode,
+  cartonTitle,
   removeLocation,
   searchLocations,
+  updateLocation,
 } from '../domain/inventory';
 import { locationLabel } from '../domain/labels';
-import { StorageLocation } from '../domain/types';
+import { LocationColor, StorageLocation } from '../domain/types';
 import { useInventory } from '../state/InventoryContext';
 import { Barcode } from '../ui/Barcode';
 import { LabelActions } from '../ui/LabelActions';
 import { Badge, Button, EmptyState, ErrorText, Field, SearchInput, SectionTitle, Sheet } from '../ui/components';
 import { confirm, errorMessage } from '../ui/dialogs';
+import { ColorPicker, colorHex } from '../ui/locationColors';
 import { colors, radius, spacing } from '../ui/theme';
 
 type FormMode = 'single' | 'series' | null;
@@ -65,6 +68,7 @@ export function LocationsScreen() {
         keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => (
           <Pressable accessibilityRole="button" onPress={() => setOpenCode(item.code)} style={styles.row}>
+            <View style={[styles.stripe, { backgroundColor: colorHex(item.color) ?? colors.border }]} />
             <View style={styles.rowMain}>
               <Text style={styles.rowCode}>{item.code}</Text>
               {item.label ? (
@@ -132,11 +136,12 @@ function LocationForm({ onCreated }: { onCreated: (code: string) => void }) {
   const { apply } = useInventory();
   const [code, setCode] = useState('');
   const [label, setLabel] = useState('');
+  const [color, setColor] = useState<LocationColor | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const submit = () => {
     try {
-      apply((current) => addLocation(current, { code, label }, new Date().toISOString()));
+      apply((current) => addLocation(current, { code, label, color }, new Date().toISOString()));
       onCreated(normalizeCode(code));
     } catch (caught) {
       setError(errorMessage(caught));
@@ -160,6 +165,7 @@ function LocationForm({ onCreated }: { onCreated: (code: string) => void }) {
         value={label}
         onChangeText={setLabel}
       />
+      <ColorPicker value={color} onChange={setColor} />
       <ErrorText message={error} />
       <Button label="Créer l'emplacement" onPress={submit} />
     </>
@@ -171,9 +177,10 @@ function SeriesForm({ onDone }: { onDone: () => void }) {
   const [aisle, setAisle] = useState('A');
   const [bays, setBays] = useState('3');
   const [levels, setLevels] = useState('4');
+  const [color, setColor] = useState<LocationColor | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const input = { aisle, bays: Number(bays), levels: Number(levels) };
+  const input = { aisle, bays: Number(bays), levels: Number(levels), color };
   let preview = '';
   try {
     const codes = locationSeriesCodes(input);
@@ -196,6 +203,7 @@ function SeriesForm({ onDone }: { onDone: () => void }) {
       <Field label="Allée ou étagère" value={aisle} onChangeText={setAisle} autoCapitalize="characters" />
       <Field label="Nombre de travées" value={bays} onChangeText={setBays} keyboardType="number-pad" />
       <Field label="Niveaux par travée" value={levels} onChangeText={setLevels} keyboardType="number-pad" />
+      <ColorPicker value={color} onChange={setColor} />
       {preview ? <Text style={styles.preview}>{preview}</Text> : null}
       <ErrorText message={error} />
       <Button label="Créer la série" onPress={submit} />
@@ -228,6 +236,10 @@ function LocationDetail({ location, onDeleted }: { location: StorageLocation; on
       <Barcode code={location.code} />
       {location.label ? <Text style={styles.rowText}>{location.label}</Text> : null}
       <LabelActions items={[locationLabel(location)]} />
+      <ColorPicker
+        value={location.color}
+        onChange={(color) => apply((current) => updateLocation(current, location.code, { color }))}
+      />
 
       <View style={styles.contents}>
         <SectionTitle>{`Cartons présents (${cartons.length})`}</SectionTitle>
@@ -235,8 +247,8 @@ function LocationDetail({ location, onDeleted }: { location: StorageLocation; on
         {cartons.map((carton) => (
           <View key={carton.code} style={styles.row}>
             <View style={styles.rowMain}>
-              <Text style={styles.rowCode}>{carton.code}</Text>
-              {carton.description ? <Text style={styles.rowText}>{carton.description}</Text> : null}
+              <Text style={styles.rowCode}>{cartonTitle(carton)}</Text>
+              {carton.name ? <Text style={styles.rowText}>{carton.name}</Text> : null}
             </View>
             {carton.quantity !== null ? <Badge label={`× ${carton.quantity}`} /> : null}
           </View>
@@ -267,6 +279,7 @@ const styles = StyleSheet.create({
     minHeight: 60,
   },
   rowMain: { flex: 1, gap: 2 },
+  stripe: { width: 8, alignSelf: 'stretch', borderRadius: 4 },
   rowCode: { fontSize: 17, fontWeight: '700', color: colors.text },
   rowText: { fontSize: 15, color: colors.muted },
   preview: { fontSize: 15, color: colors.text, fontWeight: '600' },

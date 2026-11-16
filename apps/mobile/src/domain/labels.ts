@@ -4,8 +4,10 @@ import { Carton, LabelSettings, StorageLocation } from './types';
 
 export interface LabelItem {
   code: string;
-  /** Ligne au-dessus du code-barres. */
+  /** Ligne principale au-dessus du code-barres (référence produit ou type d'étiquette). */
   title: string;
+  /** Ligne secondaire facultative (nom du produit, description de l'emplacement). */
+  subtitle?: string;
 }
 
 export interface LabelPreset {
@@ -33,11 +35,14 @@ export function labelSizeInPoints(settings: LabelSettings): { width: number; hei
 }
 
 export function cartonLabel(carton: Carton): LabelItem {
-  return { code: carton.code, title: carton.description || 'Carton' };
+  if (carton.reference) {
+    return { code: carton.code, title: carton.reference, subtitle: carton.name };
+  }
+  return { code: carton.code, title: carton.name || 'Carton' };
 }
 
 export function locationLabel(location: StorageLocation): LabelItem {
-  return { code: location.code, title: location.label || 'Emplacement' };
+  return { code: location.code, title: 'Emplacement', subtitle: location.label };
 }
 
 function escapeHtml(text: string): string {
@@ -61,6 +66,7 @@ export function buildLabelsHtml(items: LabelItem[], settings: LabelSettings): st
       (item) =>
         `<section class="label">` +
         `<div class="title">${escapeHtml(item.title)}</div>` +
+        (item.subtitle ? `<div class="subtitle">${escapeHtml(item.subtitle)}</div>` : '') +
         `<div class="bars">${code128Svg(item.code)}</div>` +
         `<div class="code">${escapeHtml(item.code)}</div>` +
         `</section>`,
@@ -82,10 +88,11 @@ export function buildLabelsHtml(items: LabelItem[], settings: LabelSettings): st
     overflow: hidden; page-break-after: always; break-after: page;
   }
   .label:last-child { page-break-after: auto; break-after: auto; }
-  .title {
+  .title, .subtitle {
     font-size: ${titleSize}mm; line-height: 1.2; text-align: center;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  .title { font-weight: 700; }
   .bars { flex: 1; min-height: 0; margin: ${margin * 0.6}mm 0; }
   .bars svg { display: block; width: 100%; height: 100%; }
   .code {

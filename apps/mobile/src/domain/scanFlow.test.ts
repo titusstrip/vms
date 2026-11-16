@@ -11,7 +11,7 @@ function seeded() {
   state = addLocation(state, { code: 'A-01-1' }, NOW);
   state = addLocation(state, { code: 'A-01-2' }, NOW);
   state = addCarton(state, { code: 'CTN-1' }, NOW);
-  state = addCarton(state, { code: 'CTN-2' }, NOW);
+  state = addCarton(state, { code: 'CTN-2', reference: 'REF-VIS' }, NOW);
   return state;
 }
 
@@ -51,6 +51,13 @@ describe('enchaînement des scans', () => {
     const second = handleScan(first.state, first.context, 'CTN-2', NOW);
     assert.equal(second.context.pendingCarton, 'CTN-2');
     assert.equal(second.state.movements.length, 0);
+  });
+
+  it('accepte la référence produit saisie à la place du code-barres', () => {
+    const selected = handleScan(seeded(), EMPTY_SCAN_CONTEXT, 'ref-vis', NOW);
+    assert.equal(selected.context.pendingCarton, 'CTN-2');
+    const placed = handleScan(selected.state, selected.context, 'A-01-1', NOW);
+    assert.equal(placed.state.cartons['CTN-2'].locationCode, 'A-01-1');
   });
 
   it('laisse le contexte intact pour un code inconnu ou vide', () => {

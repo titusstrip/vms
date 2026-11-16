@@ -4,7 +4,7 @@
  *  - emplacement puis cartons : range chaque carton scanné dans cet emplacement
  *    (rangement en série), jusqu'à remise à zéro.
  */
-import { moveCarton, normalizeCode } from './inventory';
+import { findCartonByReference, moveCarton, normalizeCode } from './inventory';
 import { Carton, InventoryState, StorageLocation } from './types';
 
 export interface ScanContext {
@@ -53,14 +53,15 @@ export function handleScan(
     };
   }
 
-  const carton = state.cartons[code];
+  // À défaut de code-barres connu, une référence produit saisie à la main désigne aussi le carton.
+  const carton = state.cartons[code] ?? findCartonByReference(state, code);
   if (carton) {
     if (context.activeLocation && state.locations[context.activeLocation]) {
-      return place(state, context, code, context.activeLocation, now);
+      return place(state, context, carton.code, context.activeLocation, now);
     }
     return {
       state,
-      context: { pendingCarton: code, activeLocation: null },
+      context: { pendingCarton: carton.code, activeLocation: null },
       outcome: { kind: 'carton-selected', carton },
     };
   }

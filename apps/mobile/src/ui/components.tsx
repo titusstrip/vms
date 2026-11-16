@@ -137,7 +137,7 @@ export function Sheet({
   children: React.ReactNode;
 }) {
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} animationType={Platform.OS === 'web' ? 'none' : 'slide'} onRequestClose={onClose}>
       <SafeAreaView style={styles.sheet}>
         <View style={styles.sheetHeader}>
           <Text style={styles.sheetTitle} numberOfLines={1}>
