@@ -62,9 +62,6 @@ export function CartonDetail({ carton, onDeleted }: { carton: Carton; onDeleted:
 
   return (
     <>
-      <Barcode code={carton.code} />
-      <LabelActions items={[cartonLabel(carton)]} />
-
       <View style={styles.locationBox}>
         <SectionTitle>Emplacement</SectionTitle>
         <LocationTag code={carton.locationCode} location={location} large />
@@ -72,8 +69,8 @@ export function CartonDetail({ carton, onDeleted }: { carton: Carton; onDeleted:
         <View style={styles.locationActions}>
           <View style={styles.grow}>
             <Button
-              label={picking ? 'Annuler' : carton.locationCode ? "Changer d'emplacement" : 'Choisir un emplacement'}
-              variant="secondary"
+              label={picking ? 'Annuler' : carton.locationCode ? "Changer d'emplacement" : 'Ranger dans un emplacement'}
+              variant={picking || carton.locationCode ? 'secondary' : 'primary'}
               compact
               onPress={() => setPicking(!picking)}
             />
@@ -84,6 +81,10 @@ export function CartonDetail({ carton, onDeleted }: { carton: Carton; onDeleted:
         </View>
         {picking ? <LocationPicker selected={carton.locationCode} onPick={moveTo} /> : null}
       </View>
+
+      <Barcode code={carton.code} />
+
+      <LabelActions items={[cartonLabel(carton)]} />
 
       <Field
         label="Référence produit"
@@ -101,7 +102,7 @@ export function CartonDetail({ carton, onDeleted }: { carton: Carton; onDeleted:
           <SectionTitle>Historique</SectionTitle>
           {movements.slice(0, 10).map((movement) => (
             <Text key={movement.id} style={styles.text}>
-              {formatDateTime(movement.at)} — {describeMovement(movement)}
+              {formatDateTime(movement.at)} — {describeMovement(movement, state)}
             </Text>
           ))}
         </View>

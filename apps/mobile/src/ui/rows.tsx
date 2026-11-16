@@ -49,12 +49,10 @@ export function LocationRow({
     >
       <View style={[styles.stripe, { backgroundColor: colorHex(location.color) ?? colors.border }]} />
       <View style={styles.main}>
-        <Text style={styles.title}>{location.code}</Text>
-        {location.label ? (
-          <Text style={styles.text} numberOfLines={1}>
-            {location.label}
-          </Text>
-        ) : null}
+        <Text style={styles.title}>{location.name}</Text>
+        <Text style={styles.text} numberOfLines={1}>
+          {location.name === location.code ? location.label : `N° ${location.code}${location.label ? ` — ${location.label}` : ''}`}
+        </Text>
       </View>
       <Badge label={`${count} carton(s)`} />
     </Pressable>

@@ -19,8 +19,10 @@ export function isLocationColor(value: unknown): value is LocationColor {
 }
 
 export interface StorageLocation {
-  /** Code scanné sur l'étiquette de l'emplacement, ex. « A-01-2 ». */
+  /** Valeur du code-barres de l'étiquette : un numéro à 5 chiffres généré automatiquement. */
   code: string;
+  /** Nom lisible de l'emplacement, ex. « A-01-2 ». */
+  name: string;
   /** Description libre, ex. « Étagère du fond, niveau 2 ». */
   label: string;
   /** Couleur de repérage, ou null si aucune. */

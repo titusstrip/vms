@@ -1,4 +1,5 @@
-import { Movement } from '../domain/types';
+import { locationName } from '../domain/inventory';
+import { InventoryState, Movement } from '../domain/types';
 
 export function formatDateTime(iso: string): string {
   const date = new Date(iso);
@@ -6,11 +7,13 @@ export function formatDateTime(iso: string): string {
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function describeMovement(movement: Movement): string {
+export function describeMovement(movement: Movement, state: InventoryState): string {
+  const from = movement.from ? locationName(state, movement.from) : null;
   if (movement.to === null) {
-    return `Sorti de ${movement.from}`;
+    return `Sorti de ${from}`;
   }
-  return movement.from ? `${movement.from} → ${movement.to}` : `Rangé en ${movement.to}`;
+  const to = locationName(state, movement.to);
+  return from ? `${from} → ${to}` : `Rangé en ${to}`;
 }
 
 /** Lit un nombre saisi au clavier ; chaîne vide → null, saisie invalide → NaN. */

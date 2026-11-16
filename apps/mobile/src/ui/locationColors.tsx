@@ -30,7 +30,7 @@ export function LocationTag({
   return (
     <View style={styles.tag}>
       {hex ? <View style={[styles.dot, large && styles.dotLarge, { backgroundColor: hex }]} /> : null}
-      <Text style={[styles.tagLabel, large && styles.tagLabelLarge]}>{code}</Text>
+      <Text style={[styles.tagLabel, large && styles.tagLabelLarge]}>{location?.name ?? code}</Text>
     </View>
   );
 }

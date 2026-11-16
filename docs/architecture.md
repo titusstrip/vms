@@ -22,7 +22,8 @@ l'état reste inchangé.
 
 ## Modèle de données
 
-- **Emplacement** : `code`, `label`, `color` (clé de la palette `LOCATION_COLORS`, ou `null`).
+- **Emplacement** : `code` (code-barres, numéro à 5 chiffres généré à partir de 10001), `name`
+  (nom affiché, ex. `A-01-2`), `label`, `color` (clé de la palette `LOCATION_COLORS`, ou `null`).
 - **Carton** (fiche produit) : `code` (valeur du code-barres), `reference` (référence produit,
   affichée en priorité), `name`, `quantity`, `locationCode` (ou `null` si non rangé).
 - **Mouvement** : `cartonCode`, `from`, `to`, `at` — les 1000 derniers sont conservés.

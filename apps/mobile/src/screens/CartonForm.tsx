@@ -142,7 +142,7 @@ export function CartonForm({
         </View>
       ) : null}
       {existing?.kind === 'location' ? (
-        <ErrorText message={`Ce code est celui de l'emplacement ${existing.location.code}.`} />
+        <ErrorText message={`Ce code est celui de l'emplacement ${existing.location.name}.`} />
       ) : null}
       <ErrorText message={error} />
       <Button label="Créer la fiche" onPress={submit} disabled={existing !== null} />

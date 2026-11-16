@@ -13,6 +13,10 @@ import {
   cartonsWithReference,
   findCartonByReference,
   findExistingCode,
+  findLocationByName,
+  locationName,
+  nextLocationCode,
+  searchLocations,
   moveCarton,
   movementsOf,
   nextCartonCode,
@@ -62,6 +66,7 @@ describe('emplacements', () => {
     const { state, created } = addLocationSeries(seeded(), { aisle: 'a', bays: 2, levels: 2 }, NOW);
     assert.deepEqual(created, ['A-02-1', 'A-02-2']);
     assert.equal(Object.keys(state.locations).length, 4);
+    assert.equal(findLocationByName(state, 'a-02-2')?.code, '10002');
   });
 
   it('libère les cartons quand un emplacement est supprimé', () => {
@@ -153,7 +158,7 @@ describe('fiche produit et couleurs', () => {
     let state = addLocation(createEmptyState(), { code: 'B-1', color: 'blue' }, NOW);
     assert.equal(state.locations['B-1'].color, 'blue');
     state = addLocationSeries(state, { aisle: 'C', bays: 1, levels: 2, color: 'green' }, NOW).state;
-    assert.equal(state.locations['C-01-2'].color, 'green');
+    assert.equal(findLocationByName(state, 'C-01-2')?.color, 'green');
     state = updateLocation(state, 'B-1', { color: null, label: ' Quai ' });
     assert.partialDeepStrictEqual(state.locations['B-1'], { color: null, label: 'Quai' });
   });
@@ -197,6 +202,41 @@ describe('codes-barres déjà enregistrés', () => {
   });
 });
 
+describe('codes-barres d’emplacement à 5 chiffres', () => {
+  it('génère un numéro à 5 chiffres et garde le nom pour l’affichage', () => {
+    let state = addLocation(createEmptyState(), { name: 'b-01-1', label: 'Quai' }, NOW);
+    state = addLocation(state, { name: 'B-01-2' }, NOW);
+    assert.deepEqual(Object.keys(state.locations), ['10001', '10002']);
+    assert.partialDeepStrictEqual(state.locations['10001'], { code: '10001', name: 'B-01-1' });
+    assert.equal(locationName(state, '10002'), 'B-01-2');
+    assert.equal(locationName(state, 'DISPARU'), 'DISPARU');
+    assert.equal(nextLocationCode(state), '10003');
+  });
+
+  it('refuse deux emplacements du même nom', () => {
+    const state = addLocation(createEmptyState(), { name: 'B-01-1' }, NOW);
+    assert.throws(() => addLocation(state, { name: ' b-01-1 ' }, NOW), /existe déjà/);
+  });
+
+  it('saute un numéro déjà pris par un carton', () => {
+    const state = addCarton(createEmptyState(), { code: '10001' }, NOW);
+    assert.equal(nextLocationCode(state), '10002');
+  });
+
+  it('retrouve emplacements et cartons par le nom de l’emplacement', () => {
+    let state = addLocation(createEmptyState(), { name: 'Quai-Nord' }, NOW);
+    state = addCarton(state, { code: 'CTN-1', locationCode: '10001' }, NOW);
+    assert.equal(searchLocations(state, 'quai').length, 1);
+    assert.equal(searchCartons(state, 'quai').length, 1);
+    assert.equal(searchLocations(state, '10001').length, 1);
+  });
+
+  it('conserve les anciens emplacements dont le code servait de nom', () => {
+    const old = JSON.stringify({ version: 1, cartons: {}, locations: { 'A-1': { code: 'A-1', label: '' } } });
+    assert.equal(parseState(old).locations['A-1'].name, 'A-1');
+  });
+});
+
 describe('sauvegarde', () => {
   it('fait un aller-retour sans perte', () => {
     const state = moveCarton(seeded(), 'CTN-000001', 'A-01-1', NOW);
@@ -230,7 +270,7 @@ describe('sauvegarde', () => {
     }).replace('"PROTO_KEY"', '"__proto__"');
     const state = parseState(hostile);
     assert.deepEqual(Object.keys(state.locations), ['A-01-1']);
-    assert.deepEqual(Object.keys(state.locations['A-01-1']).sort(), ['code', 'color', 'createdAt', 'label']);
+    assert.deepEqual(Object.keys(state.locations['A-01-1']).sort(), ['code', 'color', 'createdAt', 'label', 'name']);
     assert.equal(state.locations['A-01-1'].label, '');
     assert.equal(Object.getPrototypeOf(state.cartons), Object.prototype);
     assert.equal(state.cartons['CTN-1'].name.length, MAX_TEXT_LENGTH);

@@ -5,8 +5,7 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 import {
   addLocation,
   addLocationSeries,
-  locationSeriesCodes,
-  normalizeCode,
+  locationSeriesNames,
   searchLocations,
 } from '../domain/inventory';
 import { locationLabel } from '../domain/labels';
@@ -86,7 +85,7 @@ export function LocationsScreen() {
             ? 'Nouvel emplacement'
             : form === 'series'
               ? "Série d'emplacements"
-              : (openLocation?.code ?? '')
+              : (openLocation?.name ?? '')
         }
         onClose={() => {
           setForm(null);
@@ -112,15 +111,20 @@ export function LocationsScreen() {
 
 function LocationForm({ onCreated }: { onCreated: (code: string) => void }) {
   const { apply } = useInventory();
-  const [code, setCode] = useState('');
+  const [name, setName] = useState('');
   const [label, setLabel] = useState('');
   const [color, setColor] = useState<LocationColor | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const submit = () => {
     try {
-      apply((current) => addLocation(current, { code, label, color }, new Date().toISOString()));
-      onCreated(normalizeCode(code));
+      let createdCode = '';
+      apply((current) => {
+        const next = addLocation(current, { name, label, color }, new Date().toISOString());
+        createdCode = Object.keys(next.locations).find((key) => !current.locations[key]) ?? '';
+        return next;
+      });
+      onCreated(createdCode);
     } catch (caught) {
       setError(errorMessage(caught));
     }
@@ -129,11 +133,11 @@ function LocationForm({ onCreated }: { onCreated: (code: string) => void }) {
   return (
     <>
       <Field
-        label="Code de l'emplacement"
+        label="Nom de l'emplacement"
         placeholder="Ex. A-01-2"
-        hint="Allée, travée, niveau… C'est ce code qui sera imprimé en code-barres."
-        value={code}
-        onChangeText={setCode}
+        hint="Allée, travée, niveau… Un code-barres à 5 chiffres est généré automatiquement pour l'étiquette."
+        value={name}
+        onChangeText={setName}
         autoCapitalize="characters"
         autoFocus
       />
@@ -161,7 +165,7 @@ function SeriesForm({ onDone }: { onDone: () => void }) {
   const input = { aisle, bays: Number(bays), levels: Number(levels), color };
   let preview = '';
   try {
-    const codes = locationSeriesCodes(input);
+    const codes = locationSeriesNames(input);
     preview = `${codes.length} emplacements : de ${codes[0]} à ${codes[codes.length - 1]}`;
   } catch {
     preview = '';

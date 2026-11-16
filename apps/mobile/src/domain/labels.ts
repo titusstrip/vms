@@ -42,7 +42,10 @@ export function cartonLabel(carton: Carton): LabelItem {
 }
 
 export function locationLabel(location: StorageLocation): LabelItem {
-  return { code: location.code, title: 'Emplacement', subtitle: location.label };
+  if (location.name === location.code) {
+    return { code: location.code, title: 'Emplacement', subtitle: location.label };
+  }
+  return { code: location.code, title: location.name, subtitle: location.label };
 }
 
 function escapeHtml(text: string): string {
@@ -51,6 +54,11 @@ function escapeHtml(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/** Libellé d'un format, ex. « 50 × 30 mm ». */
+export function formatLabelSize(settings: LabelSettings): string {
+  return `${settings.widthMm} × ${settings.heightMm} mm`;
 }
 
 /** Document HTML imprimable contenant une étiquette par page. */

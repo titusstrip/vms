@@ -106,7 +106,7 @@ function Shell() {
 
       <Sheet
         visible={Boolean(openedCarton || openedLocation)}
-        title={openedCarton ? cartonTitle(openedCarton) : (openedLocation?.code ?? '')}
+        title={openedCarton ? cartonTitle(openedCarton) : (openedLocation?.name ?? '')}
         onClose={() => setOpened(null)}
       >
         {openedCarton ? (

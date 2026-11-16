@@ -122,15 +122,72 @@ function parseQuantity(quantity: number | null | undefined): number | null {
 
 // --- Emplacements -----------------------------------------------------------
 
-export function addLocation(
-  state: InventoryState,
-  input: { code: string; label?: string; color?: LocationColor | null },
-  now: string,
-): InventoryState {
-  const code = validateCode(input.code);
+/** Premier numéro attribué aux étiquettes d'emplacement (toujours 5 chiffres). */
+export const FIRST_LOCATION_NUMBER = 10001;
+const LAST_LOCATION_NUMBER = 99999;
+
+/** Prochain numéro à 5 chiffres libre pour le code-barres d'un emplacement. */
+export function nextLocationCode(state: InventoryState): string {
+  let max = FIRST_LOCATION_NUMBER - 1;
+  for (const code of Object.keys(state.locations)) {
+    if (/^\d{5}$/.test(code)) {
+      max = Math.max(max, Number(code));
+    }
+  }
+  let candidate = max + 1;
+  while (candidate <= LAST_LOCATION_NUMBER && findExistingCode(state, String(candidate))) {
+    candidate += 1;
+  }
+  if (candidate > LAST_LOCATION_NUMBER) {
+    throw new DomainError('Tous les numéros d\'emplacement à 5 chiffres sont utilisés.');
+  }
+  return String(candidate);
+}
+
+/** Nom d'emplacement saisi : majuscules, sans espaces superflus, 24 caractères au plus. */
+function validateLocationName(raw: string): string {
+  const name = normalizeCode(raw);
+  if (!name) {
+    throw new DomainError("Le nom de l'emplacement est obligatoire.");
+  }
+  if (name.length > MAX_CODE_LENGTH) {
+    throw new DomainError(`Le nom de l'emplacement ne doit pas dépasser ${MAX_CODE_LENGTH} caractères.`);
+  }
+  return name;
+}
+
+export function findLocationByName(state: InventoryState, raw: string): StorageLocation | null {
+  const wanted = normalizeCode(raw);
+  if (!wanted) {
+    return null;
+  }
+  return Object.values(state.locations).find((location) => location.name === wanted) ?? null;
+}
+
+/** Nom à afficher pour un code d'emplacement (le code lui-même si l'emplacement a disparu). */
+export function locationName(state: InventoryState, code: string): string {
+  return state.locations[code]?.name ?? code;
+}
+
+export interface LocationInput {
+  /** Nom lisible, ex. « A-01-2 ». Par défaut, le code-barres fourni. */
+  name?: string;
+  /** Code-barres existant à réutiliser ; sinon un numéro à 5 chiffres est généré. */
+  code?: string;
+  label?: string;
+  color?: LocationColor | null;
+}
+
+export function addLocation(state: InventoryState, input: LocationInput, now: string): InventoryState {
+  const name = validateLocationName(input.name ?? input.code ?? '');
+  if (findLocationByName(state, name)) {
+    throw new DomainError(`L'emplacement « ${name} » existe déjà.`);
+  }
+  const code = input.code ? validateCode(input.code) : nextLocationCode(state);
   assertCodeIsFree(state, code);
   const location: StorageLocation = {
     code,
+    name,
     label: cleanInput(input.label),
     color: input.color ?? null,
     createdAt: now,
@@ -166,9 +223,9 @@ export interface LocationSeriesInput {
   color?: LocationColor | null;
 }
 
-/** Codes d'une série d'emplacements, ex. A-01-1, A-01-2, A-02-1… */
-export function locationSeriesCodes(input: LocationSeriesInput): string[] {
-  const aisle = validateCode(input.aisle);
+/** Noms d'une série d'emplacements, ex. A-01-1, A-01-2, A-02-1… */
+export function locationSeriesNames(input: LocationSeriesInput): string[] {
+  const aisle = validateLocationName(input.aisle);
   const { bays, levels } = input;
   if (!Number.isInteger(bays) || bays < 1 || bays > 99) {
     throw new DomainError('Le nombre de travées doit être compris entre 1 et 99.');
@@ -179,13 +236,13 @@ export function locationSeriesCodes(input: LocationSeriesInput): string[] {
   const codes: string[] = [];
   for (let bay = 1; bay <= bays; bay += 1) {
     for (let level = 1; level <= levels; level += 1) {
-      codes.push(validateCode(`${aisle}-${String(bay).padStart(2, '0')}-${level}`));
+      codes.push(validateLocationName(`${aisle}-${String(bay).padStart(2, '0')}-${level}`));
     }
   }
   return codes;
 }
 
-/** Crée une série d'emplacements ; ceux qui existent déjà sont ignorés. */
+/** Crée une série d'emplacements (noms créés en retour) ; ceux qui existent déjà sont ignorés. */
 export function addLocationSeries(
   state: InventoryState,
   input: LocationSeriesInput,
@@ -193,12 +250,12 @@ export function addLocationSeries(
 ): { state: InventoryState; created: string[] } {
   const created: string[] = [];
   let next = state;
-  for (const code of locationSeriesCodes(input)) {
-    if (next.locations[code]) {
+  for (const name of locationSeriesNames(input)) {
+    if (findLocationByName(next, name)) {
       continue;
     }
-    next = addLocation(next, { code, color: input.color }, now);
-    created.push(code);
+    next = addLocation(next, { name, color: input.color }, now);
+    created.push(name);
   }
   return { state: next, created };
 }
@@ -353,7 +410,8 @@ export function searchCartons(state: InventoryState, query: string): Carton[] {
   const terms = query.toUpperCase().split(/\s+/).filter(Boolean);
   return Object.values(state.cartons)
     .filter((carton) => {
-      const haystack = `${carton.code} ${carton.reference} ${carton.name} ${carton.locationCode ?? ''}`.toUpperCase();
+      const place = carton.locationCode ? `${carton.locationCode} ${locationName(state, carton.locationCode)}` : '';
+      const haystack = `${carton.code} ${carton.reference} ${carton.name} ${place}`.toUpperCase();
       return terms.every((term) => haystack.includes(term));
     })
     .sort(byCode);
@@ -363,10 +421,10 @@ export function searchLocations(state: InventoryState, query: string): StorageLo
   const terms = query.toUpperCase().split(/\s+/).filter(Boolean);
   return Object.values(state.locations)
     .filter((location) => {
-      const haystack = `${location.code} ${location.label}`.toUpperCase();
+      const haystack = `${location.code} ${location.name} ${location.label}`.toUpperCase();
       return terms.every((term) => haystack.includes(term));
     })
-    .sort(byCode);
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
 }
 
 export function movementsOf(state: InventoryState, cartonCode: string): Movement[] {
@@ -437,6 +495,8 @@ export function parseState(json: string): InventoryState {
     const code = validateCode(raw.code);
     locations[code] = {
       code,
+      // Les premières versions utilisaient le code lui-même comme nom.
+      name: normalizeCode(cleanText(raw.name)).slice(0, MAX_CODE_LENGTH) || code,
       label: cleanText(raw.label),
       color: isLocationColor(raw.color) ? raw.color : null,
       createdAt: cleanDate(raw.createdAt, epoch),

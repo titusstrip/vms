@@ -6,13 +6,22 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import React, { ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, Vibration, View } from 'react-native';
 
-import { addLocation, cartonTitle, cartonsAt, findExistingCode, normalizeCode } from '../domain/inventory';
+import {
+  addLocation,
+  cartonTitle,
+  cartonsAt,
+  findExistingCode,
+  locationName,
+  moveCarton,
+  normalizeCode,
+} from '../domain/inventory';
 import { EMPTY_SCAN_CONTEXT, ScanContext, ScanOutcome, handleScan } from '../domain/scanFlow';
 import { DEFAULT_STABILIZER_OPTIONS, ScanStabilizer } from '../domain/scanStabilizer';
 import { useInventory } from '../state/InventoryContext';
 import { Button, ErrorText, SectionTitle, Sheet } from '../ui/components';
 import { errorMessage } from '../ui/dialogs';
 import { describeMovement, formatDateTime } from '../ui/format';
+import { LocationPicker } from '../ui/LocationPicker';
 import { LocationTag } from '../ui/locationColors';
 import { ProductCard } from '../ui/ProductCard';
 import { colors, radius, spacing } from '../ui/theme';
@@ -29,6 +38,8 @@ export function ScanScreen() {
   const [confirmed, setConfirmed] = useState<string | null>(null);
   /** Code-barres inconnu pour lequel on crée une fiche produit. */
   const [newProductCode, setNewProductCode] = useState<string | null>(null);
+  /** Carton dont on choisit l'emplacement dans la liste. */
+  const [placingCode, setPlacingCode] = useState<string | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
   const contextRef = useRef(context);
@@ -113,8 +124,31 @@ export function ScanScreen() {
   const createLocation = (code: string) => {
     setError(null);
     try {
-      apply((current) => addLocation(current, { code }, new Date().toISOString()));
+      apply((current) => addLocation(current, { name: code, code }, new Date().toISOString()));
       scan(code);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
+  };
+
+  /** Range le carton dans l'emplacement touché dans la liste, sans scanner. */
+  const placeFromList = (locationCode: string) => {
+    const cartonCode = placingCode;
+    setPlacingCode(null);
+    if (!cartonCode) {
+      return;
+    }
+    setError(null);
+    try {
+      const before = stateRef.current.cartons[cartonCode];
+      const next = apply((current) => moveCarton(current, cartonCode, locationCode, new Date().toISOString()));
+      updateContext(EMPTY_SCAN_CONTEXT);
+      setOutcome({
+        kind: 'carton-placed',
+        carton: next.cartons[cartonCode],
+        from: before?.locationCode ?? null,
+        to: locationCode,
+      });
     } catch (caught) {
       setError(errorMessage(caught));
     }
@@ -130,10 +164,10 @@ export function ScanScreen() {
   const pending = context.pendingCarton ? state.cartons[context.pendingCarton] : undefined;
   const instruction = pending
     ? pending.locationCode
-      ? `${cartonTitle(pending)} est en ${pending.locationCode}. Scannez un autre emplacement pour le déplacer.`
+      ? `${cartonTitle(pending)} est en ${locationName(state, pending.locationCode)}. Scannez un autre emplacement pour le déplacer.`
       : `${cartonTitle(pending)} sélectionné : scannez son emplacement.`
     : context.activeLocation
-      ? `Emplacement ${context.activeLocation} actif : scannez les cartons à y ranger.`
+      ? `Emplacement ${locationName(state, context.activeLocation)} actif : scannez les cartons à y ranger.`
       : 'Scannez un carton ou un emplacement.';
 
   return (
@@ -200,7 +234,12 @@ export function ScanScreen() {
 
       <ErrorText message={error} />
       {outcome ? (
-        <OutcomeCard outcome={outcome} onCreateProduct={setNewProductCode} onCreateLocation={createLocation} />
+        <OutcomeCard
+          outcome={outcome}
+          onCreateProduct={setNewProductCode}
+          onCreateLocation={createLocation}
+          onChooseLocation={setPlacingCode}
+        />
       ) : null}
 
       {state.movements.length > 0 ? (
@@ -211,7 +250,7 @@ export function ScanScreen() {
             return (
               <View key={movement.id} style={styles.historyRow}>
                 <Text style={styles.historyCode}>{carton ? cartonTitle(carton) : movement.cartonCode}</Text>
-                <Text style={styles.historyText}>{describeMovement(movement)}</Text>
+                <Text style={styles.historyText}>{describeMovement(movement, state)}</Text>
                 <Text style={styles.historyDate}>{formatDateTime(movement.at)}</Text>
               </View>
             );
@@ -241,6 +280,12 @@ export function ScanScreen() {
           />
         ) : null}
       </Sheet>
+
+      <Sheet visible={placingCode !== null} title="Choisir l'emplacement" onClose={() => setPlacingCode(null)}>
+        {placingCode !== null ? (
+          <LocationPicker selected={state.cartons[placingCode]?.locationCode} onPick={placeFromList} />
+        ) : null}
+      </Sheet>
     </ScrollView>
   );
 }
@@ -249,10 +294,12 @@ function OutcomeCard({
   outcome,
   onCreateProduct,
   onCreateLocation,
+  onChooseLocation,
 }: {
   outcome: ScanOutcome;
   onCreateProduct: (code: string) => void;
   onCreateLocation: (code: string) => void;
+  onChooseLocation: (cartonCode: string) => void;
 }) {
   const { state } = useInventory();
 
@@ -276,8 +323,13 @@ function OutcomeCard({
           </Text>
           <ProductCard carton={carton} />
           {outcome.kind === 'carton-placed' && outcome.from ? (
-            <Text style={styles.cardText}>Ancien emplacement : {outcome.from}</Text>
+            <Text style={styles.cardText}>Ancien emplacement : {locationName(state, outcome.from)}</Text>
           ) : null}
+          <Button
+            label={carton.locationCode ? "Changer d'emplacement" : 'Ranger dans un emplacement'}
+            variant={carton.locationCode ? 'secondary' : 'primary'}
+            onPress={() => onChooseLocation(carton.code)}
+          />
         </View>
       );
     }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { buildLabelsHtml, cartonLabel, labelSizeInPoints } from './labels';
+import { buildLabelsHtml, cartonLabel, formatLabelSize, labelSizeInPoints, locationLabel } from './labels';
 
 describe('étiquettes', () => {
   it('convertit les millimètres en points', () => {
@@ -32,6 +32,12 @@ describe('étiquettes', () => {
     };
     assert.deepEqual(cartonLabel(carton), { code: 'CTN-000001', title: 'HDMI-2M', subtitle: 'Câbles HDMI' });
     assert.deepEqual(cartonLabel({ ...carton, reference: '' }), { code: 'CTN-000001', title: 'Câbles HDMI' });
+  });
+
+  it('imprime le nom de l’emplacement au-dessus de son numéro à 5 chiffres', () => {
+    const location = { code: '10001', name: 'A-01-1', label: 'Fond', color: null, createdAt: '' };
+    assert.deepEqual(locationLabel(location), { code: '10001', title: 'A-01-1', subtitle: 'Fond' });
+    assert.equal(formatLabelSize({ widthMm: 62, heightMm: 29 }), '62 × 29 mm');
   });
 
   it('échappe le HTML des textes saisis ou scannés', () => {

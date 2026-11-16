@@ -2,11 +2,12 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { cartonsAt, removeLocation, updateLocation } from '../domain/inventory';
+import { cartonsAt, moveCarton, removeLocation, updateLocation } from '../domain/inventory';
 import { locationLabel } from '../domain/labels';
 import { StorageLocation } from '../domain/types';
 import { useInventory } from '../state/InventoryContext';
 import { Barcode } from '../ui/Barcode';
+import { CartonPicker } from '../ui/CartonPicker';
 import { LabelActions } from '../ui/LabelActions';
 import { Button, ErrorText, SectionTitle } from '../ui/components';
 import { confirm, errorMessage } from '../ui/dialogs';
@@ -25,6 +26,7 @@ export function LocationDetail({
 }) {
   const { state, apply } = useInventory();
   const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
   const cartons = cartonsAt(state, location.code);
 
   const remove = async () => {
@@ -39,6 +41,15 @@ export function LocationDetail({
       } catch (caught) {
         setError(errorMessage(caught));
       }
+    }
+  };
+
+  const addCarton = (cartonCode: string) => {
+    try {
+      apply((current) => moveCarton(current, cartonCode, location.code, new Date().toISOString()));
+      setError(null);
+    } catch (caught) {
+      setError(errorMessage(caught));
     }
   };
 
@@ -62,6 +73,12 @@ export function LocationDetail({
             onPress={onOpenCarton ? () => onOpenCarton(carton.code) : undefined}
           />
         ))}
+        <Button
+          label={adding ? 'Terminer' : 'Ajouter un carton ici'}
+          variant={adding ? 'secondary' : 'primary'}
+          onPress={() => setAdding(!adding)}
+        />
+        {adding ? <CartonPicker excludeLocation={location.code} onPick={addCarton} /> : null}
       </View>
 
       <ErrorText message={error} />

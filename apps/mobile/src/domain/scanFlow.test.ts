@@ -67,6 +67,14 @@ describe('enchaînement des scans', () => {
     assert.equal(result.outcome.kind === 'carton-selected' && result.outcome.carton.locationCode, 'A-01-1');
   });
 
+  it('accepte le nom d’un emplacement tapé à la place de son numéro', () => {
+    const state = addLocation(seeded(), { name: 'Quai' }, NOW);
+    const selected = handleScan(state, EMPTY_SCAN_CONTEXT, 'CTN-1', NOW);
+    const placed = handleScan(selected.state, selected.context, 'quai', NOW);
+    assert.equal(placed.state.cartons['CTN-1'].locationCode, '10001');
+    assert.equal(handleScan(state, EMPTY_SCAN_CONTEXT, '10001', NOW).outcome.kind, 'location-selected');
+  });
+
   it('laisse le contexte intact pour un code inconnu ou vide', () => {
     const first = handleScan(seeded(), EMPTY_SCAN_CONTEXT, 'CTN-1', NOW);
     const unknown = handleScan(first.state, first.context, '3760001234567', NOW);
