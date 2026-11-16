@@ -1,5 +1,5 @@
 {
-  "name": "vms-mobile-starter",
+  "name": "mini-entrepot",
   "private": true,
   "version": "0.1.0",
   "workspaces": [
@@ -7,9 +7,10 @@
   ],
   "scripts": {
     "dev:mobile": "npm --workspace apps/mobile start",
-    "dev:api": "npm --workspace apps/api run start:dev",
-    "build:api": "npm --workspace apps/api run build",
     "test": "npm --workspace apps/mobile test",
     "typecheck": "npm --workspace apps/mobile run typecheck"
+  },
+  "overrides": {
+    "minimatch": "^11.0.8"
   }
 }

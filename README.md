@@ -19,26 +19,42 @@ carton, sans perdre de temps à chercher.
 
 Les données sont enregistrées sur le téléphone ; l'application fonctionne sans réseau.
 
-## Démarrage
+## Installer l'application
 
-```bash
-npm install
-npm run dev:mobile
-```
+### Sur un téléphone Android (le plus simple)
 
-Scannez ensuite le QR code affiché avec l'application **Expo Go** (Android ou iOS), ou appuyez sur
-`w` pour ouvrir la version web dans un navigateur.
+1. Sur le téléphone, ouvrir la page **Releases** du dépôt GitHub et télécharger `mini-entrepot.apk`
+   (version « Mini Entrepôt — dernière version Android »).
+2. Ouvrir le fichier téléchargé et accepter l'installation (Android demande d'autoriser
+   l'installation depuis le navigateur la première fois).
+
+L'APK est reconstruit automatiquement à chaque modification du code (voir
+`.github/workflows/android.yml`).
+
+### En mode développement (Android ou iPhone, avec un ordinateur)
+
+1. Installer [Node.js](https://nodejs.org) (version LTS) sur l'ordinateur.
+2. Télécharger le projet (bouton **Code → Download ZIP** sur GitHub) et le décompresser.
+3. **Windows** : double-cliquer sur `lancer.bat` dans le dossier décompressé.
+   **Mac / Linux** : ouvrir un terminal **dans ce dossier**, puis `npm ci` et `npm run dev:mobile`.
+4. Installer **Expo Go** sur le téléphone et scanner le QR code affiché (téléphone et ordinateur sur
+   le même Wi-Fi).
+
+> Les commandes `npm` doivent être lancées dans le dossier du projet (celui qui contient
+> `package.json`), sinon npm répond « Could not read package.json ».
 
 ## Vérifications
 
 ```bash
 npm test          # tests de la logique métier
 npm run typecheck # contrôle des types TypeScript
+npm audit         # vulnérabilités connues des dépendances
 ```
 
 ## Structure
 
 - `apps/mobile` — application Expo (React Native + TypeScript)
-- `apps/api` — squelette d'API NestJS, non utilisé pour l'instant (réservé à une future
-  synchronisation entre plusieurs téléphones)
-- `docs/` — [guide d'utilisation](docs/guide-utilisation.md) et [architecture](docs/architecture.md)
+- `docs/` — [guide d'utilisation](docs/guide-utilisation.md), [architecture](docs/architecture.md)
+  et [sécurité](docs/securite.md)
+- `.github/workflows/android.yml` — tests, audit et construction de l'APK
+- `lancer.bat` — lancement en un double-clic sous Windows

@@ -1,8 +1,11 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+
 import { buildLabelsHtml, labelSizeInPoints } from './labels';
 
 describe('étiquettes', () => {
   it('convertit les millimètres en points', () => {
-    expect(labelSizeInPoints({ widthMm: 50, heightMm: 30 })).toEqual({ width: 142, height: 85 });
+    assert.deepEqual(labelSizeInPoints({ widthMm: 50, heightMm: 30 }), { width: 142, height: 85 });
   });
 
   it('génère une page par étiquette au format demandé', () => {
@@ -13,8 +16,17 @@ describe('étiquettes', () => {
       ],
       { widthMm: 62, heightMm: 29 },
     );
-    expect(html).toContain('size: 62mm 29mm');
-    expect(html.match(/<section class="label">/g)).toHaveLength(2);
-    expect(html).toContain('Vis &lt;M4&gt; &amp; écrous');
+    assert.ok(html.includes('size: 62mm 29mm'));
+    assert.equal(html.match(/<section class="label">/g)?.length, 2);
+  });
+
+  it('échappe le HTML des textes saisis ou scannés', () => {
+    const html = buildLabelsHtml(
+      [{ code: '<B>"X"&', title: '<script>alert(1)</script>' }],
+      { widthMm: 50, heightMm: 30 },
+    );
+    assert.ok(!html.includes('<script>'));
+    assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+    assert.ok(html.includes('&lt;B&gt;&quot;X&quot;&amp;'));
   });
 });

@@ -8,7 +8,7 @@ présentation et [docs/](../../docs) pour le guide d'utilisation et l'architectu
 - `npm start` — serveur de développement Expo (QR code pour Expo Go)
 - `npm run android` / `npm run ios` — ouvrir sur un appareil ou un émulateur
 - `npm run web` — ouvrir dans le navigateur
-- `npm test` — tests unitaires de `src/domain`
+- `npm test` — tests unitaires de `src/domain` (lanceur de tests intégré à Node.js)
 - `npm run typecheck` — contrôle des types
 
 ## Organisation du code

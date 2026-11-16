@@ -3,14 +3,14 @@
 ## Vue d'ensemble
 
 L'application est autonome : toutes les données vivent sur le téléphone (AsyncStorage) et aucune
-connexion n'est nécessaire. Le dossier `apps/api` est un squelette NestJS conservé pour une future
-synchronisation entre plusieurs appareils ; l'application ne l'appelle pas.
+connexion n'est nécessaire. Il n'y a pas de serveur : le squelette d'API du starter, inutilisé, a été
+retiré pour réduire la surface d'attaque et le nombre de dépendances.
 
 ## Couches (`apps/mobile/src`)
 
 | Dossier    | Rôle                                                                                  |
 | ---------- | ------------------------------------------------------------------------------------- |
-| `domain`   | Logique métier pure, sans React ni accès au téléphone. Entièrement couverte par tests. |
+| `domain`   | Logique métier pure, sans React ni accès au téléphone. Couverte par des tests (`node --test`). |
 | `state`    | `InventoryContext` : état en mémoire, chargement et enregistrement automatiques.       |
 | `services` | Impression (`expo-print`), partage PDF, export / import de sauvegarde.                 |
 | `ui`       | Composants réutilisables, thème, boîtes de dialogue compatibles mobile et web.         |
@@ -57,6 +57,6 @@ partager vers l'application du fabricant de l'étiqueteuse.
 
 ## Pistes d'évolution
 
-- synchronisation multi-téléphones via `apps/api` ;
+- synchronisation multi-téléphones (demandera un serveur et une authentification) ;
 - impression directe Bluetooth (ZPL / ESC-POS) pour les étiqueteuses sans pilote système ;
 - photos de cartons, inventaire tournant, export CSV.

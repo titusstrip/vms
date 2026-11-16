@@ -14,6 +14,8 @@ import {
 
 export const MAX_MOVEMENTS = 1000;
 export const CARTON_PREFIX = 'CTN-';
+/** Longueur maximale des textes libres (contenu, description). */
+export const MAX_TEXT_LENGTH = 200;
 
 export const DEFAULT_LABEL_SETTINGS: LabelSettings = { widthMm: 50, heightMm: 30 };
 
@@ -77,7 +79,7 @@ export function addLocation(
 ): InventoryState {
   const code = validateCode(input.code);
   assertCodeIsFree(state, code);
-  const location: StorageLocation = { code, label: (input.label ?? '').trim(), createdAt: now };
+  const location: StorageLocation = { code, label: (input.label ?? '').trim().slice(0, MAX_TEXT_LENGTH), createdAt: now };
   return { ...state, locations: { ...state.locations, [code]: location } };
 }
 
@@ -155,7 +157,7 @@ export function addCarton(state: InventoryState, input: CartonInput, now: string
   assertCodeIsFree(state, code);
   const carton: Carton = {
     code,
-    description: (input.description ?? '').trim(),
+    description: (input.description ?? '').trim().slice(0, MAX_TEXT_LENGTH),
     quantity: parseQuantity(input.quantity),
     locationCode: null,
     createdAt: now,
@@ -178,7 +180,9 @@ export function updateCarton(
   }
   const updated: Carton = {
     ...carton,
-    description: changes.description !== undefined ? changes.description.trim() : carton.description,
+    description: changes.description !== undefined
+        ? changes.description.trim().slice(0, MAX_TEXT_LENGTH)
+        : carton.description,
     quantity: changes.quantity !== undefined ? parseQuantity(changes.quantity) : carton.quantity,
     updatedAt: now,
   };
@@ -298,38 +302,107 @@ export function serializeState(state: InventoryState): string {
   return JSON.stringify(state);
 }
 
-/** Relit un état sauvegardé ; lève une DomainError si le contenu n'est pas exploitable. */
+/** Taille maximale acceptée pour un fichier de sauvegarde. */
+export const MAX_BACKUP_BYTES = 5_000_000;
+
+const INVALID_BACKUP = "Le fichier n'est pas une sauvegarde valide.";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function cleanText(value: unknown): string {
+  return typeof value === 'string' ? value.trim().slice(0, MAX_TEXT_LENGTH) : '';
+}
+
+function cleanDate(value: unknown, fallback: string): string {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : fallback;
+}
+
+function cleanCodeOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value ? normalizeCode(value) : null;
+}
+
+/**
+ * Relit un état sauvegardé. Le contenu est traité comme non fiable : chaque
+ * champ est revalidé et reconstruit, rien n'est recopié tel quel. Lève une
+ * DomainError si le fichier n'est pas exploitable.
+ */
 export function parseState(json: string): InventoryState {
+  if (json.length > MAX_BACKUP_BYTES) {
+    throw new DomainError('Le fichier de sauvegarde est trop volumineux.');
+  }
   let data: unknown;
   try {
     data = JSON.parse(json);
   } catch {
-    throw new DomainError("Le fichier n'est pas une sauvegarde valide.");
+    throw new DomainError(INVALID_BACKUP);
   }
-  const candidate = data as Partial<InventoryState> | null;
-  if (
-    !candidate ||
-    typeof candidate !== 'object' ||
-    candidate.version !== 1 ||
-    typeof candidate.cartons !== 'object' ||
-    typeof candidate.locations !== 'object' ||
-    !candidate.cartons ||
-    !candidate.locations
-  ) {
-    throw new DomainError("Le fichier n'est pas une sauvegarde valide.");
+  if (!isRecord(data) || data.version !== 1 || !isRecord(data.cartons) || !isRecord(data.locations)) {
+    throw new DomainError(INVALID_BACKUP);
   }
-  const locations = candidate.locations;
+  const epoch = new Date(0).toISOString();
+
+  const locations: Record<string, StorageLocation> = {};
+  for (const raw of Object.values(data.locations)) {
+    if (!isRecord(raw) || typeof raw.code !== 'string') {
+      throw new DomainError(INVALID_BACKUP);
+    }
+    const code = validateCode(raw.code);
+    locations[code] = { code, label: cleanText(raw.label), createdAt: cleanDate(raw.createdAt, epoch) };
+  }
+
   const cartons: Record<string, Carton> = {};
-  for (const carton of Object.values(candidate.cartons)) {
+  for (const raw of Object.values(data.cartons)) {
+    if (!isRecord(raw) || typeof raw.code !== 'string') {
+      throw new DomainError(INVALID_BACKUP);
+    }
+    const code = validateCode(raw.code);
+    if (locations[code]) {
+      throw new DomainError(INVALID_BACKUP);
+    }
     // Un carton ne doit jamais pointer vers un emplacement disparu.
-    const locationCode = carton.locationCode && locations[carton.locationCode] ? carton.locationCode : null;
-    cartons[carton.code] = { ...carton, locationCode };
+    const target = cleanCodeOrNull(raw.locationCode);
+    const createdAt = cleanDate(raw.createdAt, epoch);
+    cartons[code] = {
+      code,
+      description: cleanText(raw.description),
+      quantity:
+        typeof raw.quantity === 'number' && Number.isFinite(raw.quantity) && raw.quantity >= 0
+          ? raw.quantity
+          : null,
+      locationCode: target && locations[target] ? target : null,
+      createdAt,
+      updatedAt: cleanDate(raw.updatedAt, createdAt),
+    };
   }
-  return {
-    version: 1,
-    cartons,
-    locations,
-    movements: Array.isArray(candidate.movements) ? candidate.movements.slice(0, MAX_MOVEMENTS) : [],
-    labelSettings: candidate.labelSettings ?? DEFAULT_LABEL_SETTINGS,
-  };
+
+  const movements: Movement[] = [];
+  for (const raw of Array.isArray(data.movements) ? data.movements.slice(0, MAX_MOVEMENTS) : []) {
+    if (!isRecord(raw) || typeof raw.cartonCode !== 'string' || !cartons[normalizeCode(raw.cartonCode)]) {
+      continue;
+    }
+    const at = cleanDate(raw.at, epoch);
+    movements.push({
+      id: typeof raw.id === 'string' ? raw.id.slice(0, 100) : `${at}-${movements.length}`,
+      cartonCode: normalizeCode(raw.cartonCode),
+      from: cleanCodeOrNull(raw.from),
+      to: cleanCodeOrNull(raw.to),
+      at,
+    });
+  }
+
+  let labelSettings = DEFAULT_LABEL_SETTINGS;
+  if (isRecord(data.labelSettings)) {
+    const { widthMm, heightMm } = data.labelSettings;
+    if (typeof widthMm === 'number' && typeof heightMm === 'number') {
+      try {
+        labelSettings = updateLabelSettings(createEmptyState(), { widthMm, heightMm }).labelSettings;
+      } catch {
+        labelSettings = DEFAULT_LABEL_SETTINGS;
+      }
+    }
+  }
+
+  return { version: 1, cartons, locations, movements, labelSettings };
 }

@@ -1,0 +1,74 @@
+# Vérifie le projet puis construit l'application Android (APK) téléchargeable.
+name: Android
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verifications:
+    name: Tests, types et audit de sécurité
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - name: Audit des dépendances
+        run: npm audit
+
+  apk:
+    name: Construction de l'APK
+    needs: verifications
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write # nécessaire uniquement pour publier l'APK dans les « Releases »
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - name: Générer le projet Android
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android --no-install
+        env:
+          CI: '1'
+      - name: Compiler l'APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+      - name: Renommer l'APK
+        run: cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk mini-entrepot.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mini-entrepot-apk
+          path: mini-entrepot.apk
+      - name: Publier dans les Releases
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-latest --cleanup-tag --yes || true
+          gh release create android-latest mini-entrepot.apk \
+            --target "$GITHUB_SHA" \
+            --title "Mini Entrepôt — dernière version Android" \
+            --notes "Téléchargez mini-entrepot.apk sur un téléphone Android puis ouvrez le fichier pour installer l'application."
