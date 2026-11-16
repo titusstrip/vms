@@ -1,0 +1,14 @@
+# Logs and local files
+
+.env
+.env.*
+*.log
+__pycache__/
+.pytest_cache/
+node_modules/
+.vite/
+*.sqlite3
+.DS_Store
+coverage/
+.dist/
+.build/
