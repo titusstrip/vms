@@ -1,5 +1,5 @@
 /** Petits composants d'interface réutilisés par tous les écrans. */
-import React from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -124,6 +124,40 @@ export function SectionTitle({ children }: { children: string }) {
   return <Text style={styles.sectionTitle}>{children}</Text>;
 }
 
+interface SheetControls {
+  close: () => void;
+  setAction: (action: { label: string; disabled: boolean } | null) => void;
+  handler: React.MutableRefObject<(() => void) | null>;
+}
+
+const SheetContext = createContext<SheetControls | null>(null);
+
+/** Ferme la fenêtre courante (pour un bouton « Fermer » placé dans le contenu). */
+export function useSheetClose(): () => void {
+  return useContext(SheetContext)?.close ?? (() => undefined);
+}
+
+/**
+ * Place l'action principale du contenu (ex. « Créer la fiche ») dans l'en-tête
+ * de la fenêtre, à la place du bouton « Fermer ». Passer null pour le rétablir.
+ */
+export function useSheetPrimaryAction(
+  action: { label: string; disabled?: boolean; onPress: () => void } | null,
+): void {
+  const controls = useContext(SheetContext);
+  const label = action?.label ?? null;
+  const disabled = action?.disabled ?? false;
+  if (controls) {
+    // Le gestionnaire est relu à chaque rendu pour toujours voir la saisie en cours.
+    controls.handler.current = action?.onPress ?? null;
+  }
+  const setAction = controls?.setAction;
+  useEffect(() => {
+    setAction?.(label ? { label, disabled } : null);
+    return () => setAction?.(null);
+  }, [setAction, label, disabled]);
+}
+
 /** Fenêtre plein écran avec titre et bouton de fermeture, pour les fiches et formulaires. */
 export function Sheet({
   visible,
@@ -136,6 +170,15 @@ export function Sheet({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const [action, setAction] = useState<{ label: string; disabled: boolean } | null>(null);
+  const handler = useRef<(() => void) | null>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const controls = useMemo<SheetControls>(
+    () => ({ close: () => closeRef.current(), setAction, handler }),
+    [],
+  );
+
   return (
     <Modal visible={visible} animationType={Platform.OS === 'web' ? 'none' : 'slide'} onRequestClose={onClose}>
       <SafeAreaView style={styles.sheet}>
@@ -143,14 +186,18 @@ export function Sheet({
           <Text style={styles.sheetTitle} numberOfLines={1}>
             {title}
           </Text>
-          <Button label="Fermer" variant="secondary" compact onPress={onClose} />
+          {action ? (
+            <Button label={action.label} compact disabled={action.disabled} onPress={() => handler.current?.()} />
+          ) : (
+            <Button label="Fermer" variant="secondary" compact onPress={onClose} />
+          )}
         </View>
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <ScrollView contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
-            {children}
+            <SheetContext.Provider value={controls}>{children}</SheetContext.Provider>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>

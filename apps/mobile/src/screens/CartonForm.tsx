@@ -16,7 +16,14 @@ import {
 import { useInventory } from '../state/InventoryContext';
 import { LocationPicker } from '../ui/LocationPicker';
 import { ProductCard } from '../ui/ProductCard';
-import { Button, ErrorText, Field, SectionTitle } from '../ui/components';
+import {
+  Button,
+  ErrorText,
+  Field,
+  SectionTitle,
+  useSheetClose,
+  useSheetPrimaryAction,
+} from '../ui/components';
 import { errorMessage } from '../ui/dialogs';
 import { parseNumberInput } from '../ui/format';
 import { CartonRow } from '../ui/rows';
@@ -46,7 +53,34 @@ export function CartonForm({
   /** Code de la fiche créée : on passe alors au choix de l'emplacement. */
   const [createdCode, setCreatedCode] = useState<string | null>(null);
 
+  const closeSheet = useSheetClose();
   const created = createdCode ? state.cartons[createdCode] : undefined;
+  const existing = !created && code.trim() ? findExistingCode(state, code) : null;
+
+  const submit = () => {
+    try {
+      let createdCarton: string | null = null;
+      apply((current) => {
+        const next = addCarton(
+          current,
+          { code, reference, name, quantity: parseNumberInput(quantity) },
+          new Date().toISOString(),
+        );
+        createdCarton = Object.keys(next.cartons).find((key) => !current.cartons[key]) ?? null;
+        return next;
+      });
+      setError(null);
+      setCreatedCode(createdCarton);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
+  };
+
+  // « Créer la fiche » est dans l'en-tête, toujours visible même clavier ouvert ; « Fermer » est en bas.
+  useSheetPrimaryAction(
+    created ? null : { label: 'Créer la fiche', disabled: existing !== null, onPress: submit },
+  );
+
   if (created) {
     const place = (locationCode: string) => {
       try {
@@ -71,27 +105,7 @@ export function CartonForm({
     );
   }
 
-  const existing = code.trim() ? findExistingCode(state, code) : null;
   const sameReference = cartonsWithReference(state, reference);
-
-  const submit = () => {
-    try {
-      let createdCarton: string | null = null;
-      apply((current) => {
-        const next = addCarton(
-          current,
-          { code, reference, name, quantity: parseNumberInput(quantity) },
-          new Date().toISOString(),
-        );
-        createdCarton = Object.keys(next.cartons).find((key) => !current.cartons[key]) ?? null;
-        return next;
-      });
-      setError(null);
-      setCreatedCode(createdCarton);
-    } catch (caught) {
-      setError(errorMessage(caught));
-    }
-  };
 
   return (
     <>
@@ -145,7 +159,7 @@ export function CartonForm({
         <ErrorText message={`Ce code est celui de l'emplacement ${existing.location.name}.`} />
       ) : null}
       <ErrorText message={error} />
-      <Button label="Créer la fiche" onPress={submit} disabled={existing !== null} />
+      <Button label="Fermer" variant="secondary" onPress={closeSheet} />
     </>
   );
 }
