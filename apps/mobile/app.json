@@ -1,12 +1,28 @@
 {
   "expo": {
-    "name": "VMS Mobile",
+    "name": "Mini Entrepôt",
     "slug": "vms-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
-    "assetBundlePatterns": [
-      "**/*"
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "com.vms.minientrepot",
+      "infoPlist": {
+        "NSCameraUsageDescription": "La caméra sert à scanner les codes-barres des cartons et des emplacements."
+      }
+    },
+    "android": {
+      "package": "com.vms.minientrepot",
+      "permissions": ["android.permission.CAMERA"]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "La caméra sert à scanner les codes-barres des cartons et des emplacements.",
+          "recordAudioAndroid": false
+        }
+      ]
     ]
   }
 }

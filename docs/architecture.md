@@ -1,20 +1,62 @@
-# Architecture notes
+# Architecture
 
-## Mobile app
+## Vue d'ensemble
 
-The mobile app uses an Expo-based React Native dashboard inspired by surveillance control rooms. The initial screen focuses on:
+L'application est autonome : toutes les données vivent sur le téléphone (AsyncStorage) et aucune
+connexion n'est nécessaire. Le dossier `apps/api` est un squelette NestJS conservé pour une future
+synchronisation entre plusieurs appareils ; l'application ne l'appelle pas.
 
-- camera grid
-- live/recording/offline status
-- event feed
-- summary metrics
+## Couches (`apps/mobile/src`)
 
-## API
+| Dossier    | Rôle                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------- |
+| `domain`   | Logique métier pure, sans React ni accès au téléphone. Entièrement couverte par tests. |
+| `state`    | `InventoryContext` : état en mémoire, chargement et enregistrement automatiques.       |
+| `services` | Impression (`expo-print`), partage PDF, export / import de sauvegarde.                 |
+| `ui`       | Composants réutilisables, thème, boîtes de dialogue compatibles mobile et web.         |
+| `screens`  | Scanner, Cartons, Emplacements, Réglages.                                              |
 
-The API is intentionally minimal at this stage. The goal is to expose a health endpoint and basic device metadata so that the frontend can be connected to a real backend later.
+Les écrans ne modifient jamais l'état directement : ils passent une fonction du domaine à
+`apply(...)`. Si la règle métier échoue, elle lève une `DomainError` dont le message est affiché, et
+l'état reste inchangé.
 
-## Next steps
+## Modèle de données
 
-- add authentication / user session layer
-- connect the mobile app to real camera metadata via API
-- add detail screens for camera view, event logs, and alert management
+- **Emplacement** : `code`, `label`.
+- **Carton** : `code` (référence), `description`, `quantity`, `locationCode` (ou `null` si non rangé).
+- **Mouvement** : `cartonCode`, `from`, `to`, `at` — les 1000 derniers sont conservés.
+
+Le code sert d'identifiant et il est unique tous types confondus : un scan désigne donc sans
+ambiguïté soit un carton, soit un emplacement. Les codes sont normalisés en majuscules.
+
+## Codes-barres
+
+`domain/code128.ts` encode en **Code 128** (jeu B, ou jeu C plus compact pour les références
+numériques de longueur paire). C'est le format 1D standard en logistique, lu par toutes les
+douchettes et par la caméra. La même géométrie de barres sert à l'aperçu à l'écran
+(`react-native-svg`) et à l'impression (SVG dans le HTML de l'étiquette).
+
+## Enchaînement des scans
+
+`domain/scanFlow.ts` est une petite machine à états :
+
+- carton puis emplacement → le carton est rangé, puis retour à zéro ;
+- emplacement puis cartons → chaque carton scanné est rangé dans cet emplacement (rangement en
+  série) jusqu'à « Terminer » ;
+- code inconnu → proposition de créer un carton ou un emplacement avec ce code.
+
+La caméra et la douchette alimentent la même fonction `handleScan`. Une douchette en mode clavier
+tape le code dans le champ de saisie puis envoie « Entrée » ; le champ garde le focus pour enchaîner.
+
+## Impression
+
+`domain/labels.ts` produit un document HTML avec une étiquette par page, à la taille du rouleau
+(`@page { size: … }`). `services/printing.ts` l'envoie au système d'impression du téléphone
+(AirPrint, services d'impression Android, boîte d'impression du navigateur) ou en fait un PDF à
+partager vers l'application du fabricant de l'étiqueteuse.
+
+## Pistes d'évolution
+
+- synchronisation multi-téléphones via `apps/api` ;
+- impression directe Bluetooth (ZPL / ESC-POS) pour les étiqueteuses sans pilote système ;
+- photos de cartons, inventaire tournant, export CSV.
