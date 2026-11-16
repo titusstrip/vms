@@ -1,0 +1,14 @@
+{
+  "name": "vms-mobile-starter",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:mobile": "npm --workspace apps/mobile start",
+    "dev:api": "npm --workspace apps/api start:dev",
+    "build:api": "npm --workspace apps/api build",
+    "lint": "npm --workspace apps/mobile lint"
+  }
+}

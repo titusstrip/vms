@@ -1,33 +1,42 @@
-# VMS
+# VMS Mobile Starter
 
-Projet de démarrage pour un système VMS.
+This repository is a starter monorepo for a mobile application inspired by a VMS (Video Management System) dashboard.
 
-## Objectif
+## Stack
 
-Ce dépôt sert de base pour développer votre application VMS avec une structure claire, compatible avec Claude Code et facile à étendre.
+- Mobile app: React Native + Expo + TypeScript
+- API: NestJS + TypeScript
+- Data model: mock camera streams + future API integration
+- UI: dashboard with camera tiles, live status, alarms, and recent events
 
-## Structure suggérée
+## Project structure
 
-- `src/` : code applicatif
-- `docs/` : documentation technique et architecture
-- `scripts/` : scripts utilitaires et d’automatisation
-- `tests/` : tests unitaires et d’intégration
-- `config/` : fichiers de configuration
+- `apps/mobile` — Expo mobile application
+- `apps/api` — NestJS backend API
+- `docs/` — architecture and product notes
 
-## Démarrage rapide
+## Quick start
 
-1. Créer un environnement virtuel ou installer les dépendances du stack choisi.
-2. Configurer les variables d’environnement.
-3. Lancer l’application ou les services requis.
-4. Commencer par la documentation dans `docs/`.
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Start the API:
+   ```bash
+   npm run dev:api
+   ```
+3. Start the mobile app:
+   ```bash
+   npm run dev:mobile
+   ```
 
-## État du dépôt
+## Initial goals
 
-Ce dépôt est actuellement un squelette de projet prêt à être personnalisé selon votre stack technique (Node.js, Python, Go, etc.).
+- Display a VMS dashboard with camera tiles
+- Show alarms, events, and live status sorting
+- Prepare a clean interface ready for real camera or stream integrations
+- Provide a backend API skeleton for future authentication and device management
 
-## Prochaines étapes
+## Notes
 
-- choisir le framework / runtime
-- définir les modules métier
-- configurer les tests et l’intégration continue
-- documenter les APIs et la base de données
+This is a starter project, not a production-ready VMS solution. It is designed to be a clean base for further feature development.

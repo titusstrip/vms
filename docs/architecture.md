@@ -1,19 +1,20 @@
-# Architecture du projet VMS
+# Architecture notes
 
-## Vue d'ensemble
+## Mobile app
 
-Le projet est organisé de manière à supporter une évolution simple et claire.
+The mobile app uses an Expo-based React Native dashboard inspired by surveillance control rooms. The initial screen focuses on:
 
-## Couches
+- camera grid
+- live/recording/offline status
+- event feed
+- summary metrics
 
-- `src/` : code application
-- `docs/` : documentation fonctionnelle et technique
-- `scripts/` : outils et automatisations
-- `tests/` : validation du comportement et des cas limites
+## API
 
-## Recommandations
+The API is intentionally minimal at this stage. The goal is to expose a health endpoint and basic device metadata so that the frontend can be connected to a real backend later.
 
-- définir clairement les modules métier
-- séparer les services, les DTOs et les contrôleurs
-- centraliser les configurations
-- documenter chaque point d’entrée important
+## Next steps
+
+- add authentication / user session layer
+- connect the mobile app to real camera metadata via API
+- add detail screens for camera view, event logs, and alert management
