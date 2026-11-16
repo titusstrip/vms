@@ -4,7 +4,7 @@
  *  - emplacement puis cartons : range chaque carton scanné dans cet emplacement
  *    (rangement en série), jusqu'à remise à zéro.
  */
-import { findCartonByReference, moveCarton, normalizeCode } from './inventory';
+import { findCartonByReference, findExistingCode, moveCarton, normalizeCode } from './inventory';
 import { Carton, InventoryState, StorageLocation } from './types';
 
 export interface ScanContext {
@@ -41,20 +41,22 @@ export function handleScan(
     return { state, context, outcome: { kind: 'empty' } };
   }
 
-  const location = state.locations[code];
-  if (location) {
+  // Un code déjà enregistré est toujours reconnu, même lu sous une écriture équivalente.
+  const existing = findExistingCode(state, code);
+  if (existing?.kind === 'location') {
+    const { location } = existing;
     if (context.pendingCarton && state.cartons[context.pendingCarton]) {
-      return place(state, EMPTY_SCAN_CONTEXT, context.pendingCarton, code, now);
+      return place(state, EMPTY_SCAN_CONTEXT, context.pendingCarton, location.code, now);
     }
     return {
       state,
-      context: { pendingCarton: null, activeLocation: code },
+      context: { pendingCarton: null, activeLocation: location.code },
       outcome: { kind: 'location-selected', location },
     };
   }
 
   // À défaut de code-barres connu, une référence produit saisie à la main désigne aussi le carton.
-  const carton = state.cartons[code] ?? findCartonByReference(state, code);
+  const carton = existing?.kind === 'carton' ? existing.carton : findCartonByReference(state, code);
   if (carton) {
     if (context.activeLocation && state.locations[context.activeLocation]) {
       return place(state, context, carton.code, context.activeLocation, now);

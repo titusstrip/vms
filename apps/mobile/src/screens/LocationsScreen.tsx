@@ -1,27 +1,24 @@
 /** Liste, création (à l'unité ou en série) et fiche des emplacements. */
 import React, { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 
 import {
   addLocation,
   addLocationSeries,
-  cartonsAt,
   locationSeriesCodes,
   normalizeCode,
-  cartonTitle,
-  removeLocation,
   searchLocations,
-  updateLocation,
 } from '../domain/inventory';
 import { locationLabel } from '../domain/labels';
-import { LocationColor, StorageLocation } from '../domain/types';
+import { LocationColor } from '../domain/types';
 import { useInventory } from '../state/InventoryContext';
-import { Barcode } from '../ui/Barcode';
 import { LabelActions } from '../ui/LabelActions';
-import { Badge, Button, EmptyState, ErrorText, Field, SearchInput, SectionTitle, Sheet } from '../ui/components';
-import { confirm, errorMessage } from '../ui/dialogs';
-import { ColorPicker, colorHex } from '../ui/locationColors';
-import { colors, radius, spacing } from '../ui/theme';
+import { Button, EmptyState, ErrorText, Field, SearchInput, Sheet } from '../ui/components';
+import { errorMessage } from '../ui/dialogs';
+import { ColorPicker } from '../ui/locationColors';
+import { LocationRow, countByLocation } from '../ui/rows';
+import { colors, spacing } from '../ui/theme';
+import { LocationDetail } from './LocationDetail';
 
 type FormMode = 'single' | 'series' | null;
 
@@ -32,15 +29,7 @@ export function LocationsScreen() {
   const [openCode, setOpenCode] = useState<string | null>(null);
 
   const locations = useMemo(() => searchLocations(state, query), [state, query]);
-  const counts = useMemo(() => {
-    const result: Record<string, number> = {};
-    for (const carton of Object.values(state.cartons)) {
-      if (carton.locationCode) {
-        result[carton.locationCode] = (result[carton.locationCode] ?? 0) + 1;
-      }
-    }
-    return result;
-  }, [state.cartons]);
+  const counts = useMemo(() => countByLocation(state.cartons), [state.cartons]);
   const total = Object.keys(state.locations).length;
   const openLocation = openCode ? state.locations[openCode] : undefined;
 
@@ -48,8 +37,8 @@ export function LocationsScreen() {
     <View style={styles.screen}>
       <View style={styles.toolbar}>
         <SearchInput
-          accessibilityLabel="Rechercher un emplacement"
-          placeholder="Rechercher un emplacement"
+          accessibilityLabel="Filtrer les emplacements"
+          placeholder="Filtrer la liste des emplacements"
           value={query}
           onChangeText={setQuery}
         />
@@ -67,18 +56,7 @@ export function LocationsScreen() {
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => (
-          <Pressable accessibilityRole="button" onPress={() => setOpenCode(item.code)} style={styles.row}>
-            <View style={[styles.stripe, { backgroundColor: colorHex(item.color) ?? colors.border }]} />
-            <View style={styles.rowMain}>
-              <Text style={styles.rowCode}>{item.code}</Text>
-              {item.label ? (
-                <Text style={styles.rowText} numberOfLines={1}>
-                  {item.label}
-                </Text>
-              ) : null}
-            </View>
-            <Badge label={`${counts[item.code] ?? 0} carton(s)`} />
-          </Pressable>
+          <LocationRow location={item} count={counts[item.code] ?? 0} onPress={() => setOpenCode(item.code)} />
         )}
         ListEmptyComponent={
           total === 0 ? (
@@ -211,77 +189,11 @@ function SeriesForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function LocationDetail({ location, onDeleted }: { location: StorageLocation; onDeleted: () => void }) {
-  const { state, apply } = useInventory();
-  const [error, setError] = useState<string | null>(null);
-  const cartons = cartonsAt(state, location.code);
-
-  const remove = async () => {
-    const detail =
-      cartons.length > 0
-        ? `Les ${cartons.length} carton(s) présents deviendront « non rangés ».`
-        : "L'emplacement sera supprimé.";
-    if (await confirm('Supprimer cet emplacement ?', detail, 'Supprimer')) {
-      try {
-        onDeleted();
-        apply((current) => removeLocation(current, location.code, new Date().toISOString()));
-      } catch (caught) {
-        setError(errorMessage(caught));
-      }
-    }
-  };
-
-  return (
-    <>
-      <Barcode code={location.code} />
-      {location.label ? <Text style={styles.rowText}>{location.label}</Text> : null}
-      <LabelActions items={[locationLabel(location)]} />
-      <ColorPicker
-        value={location.color}
-        onChange={(color) => apply((current) => updateLocation(current, location.code, { color }))}
-      />
-
-      <View style={styles.contents}>
-        <SectionTitle>{`Cartons présents (${cartons.length})`}</SectionTitle>
-        {cartons.length === 0 ? <Text style={styles.rowText}>Aucun carton à cet emplacement.</Text> : null}
-        {cartons.map((carton) => (
-          <View key={carton.code} style={styles.row}>
-            <View style={styles.rowMain}>
-              <Text style={styles.rowCode}>{cartonTitle(carton)}</Text>
-              {carton.name ? <Text style={styles.rowText}>{carton.name}</Text> : null}
-            </View>
-            {carton.quantity !== null ? <Badge label={`× ${carton.quantity}`} /> : null}
-          </View>
-        ))}
-      </View>
-
-      <ErrorText message={error} />
-      <Button label="Supprimer l'emplacement" variant="danger" onPress={remove} />
-    </>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   grow: { flex: 1 },
   toolbar: { padding: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
   actions: { flexDirection: 'row', gap: spacing.sm },
   list: { padding: spacing.lg, paddingTop: spacing.sm, gap: spacing.sm },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    minHeight: 60,
-  },
-  rowMain: { flex: 1, gap: 2 },
-  stripe: { width: 8, alignSelf: 'stretch', borderRadius: 4 },
-  rowCode: { fontSize: 17, fontWeight: '700', color: colors.text },
-  rowText: { fontSize: 15, color: colors.muted },
   preview: { fontSize: 15, color: colors.text, fontWeight: '600' },
-  contents: { gap: spacing.sm },
 });

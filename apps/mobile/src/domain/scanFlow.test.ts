@@ -60,6 +60,13 @@ describe('enchaînement des scans', () => {
     assert.equal(placed.state.cartons['CTN-2'].locationCode, 'A-01-1');
   });
 
+  it('retrouve la fiche existante au lieu de proposer un doublon (EAN-13 / UPC-A)', () => {
+    const state = addCarton(seeded(), { code: '036000291452', reference: 'SODA', locationCode: 'A-01-1' }, NOW);
+    const result = handleScan(state, EMPTY_SCAN_CONTEXT, '0036000291452', NOW);
+    assert.equal(result.outcome.kind, 'carton-selected');
+    assert.equal(result.outcome.kind === 'carton-selected' && result.outcome.carton.locationCode, 'A-01-1');
+  });
+
   it('laisse le contexte intact pour un code inconnu ou vide', () => {
     const first = handleScan(seeded(), EMPTY_SCAN_CONTEXT, 'CTN-1', NOW);
     const unknown = handleScan(first.state, first.context, '3760001234567', NOW);

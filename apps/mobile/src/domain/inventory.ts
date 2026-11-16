@@ -53,12 +53,56 @@ export function validateCode(raw: string): string {
   return code;
 }
 
-function assertCodeIsFree(state: InventoryState, code: string): void {
-  if (state.cartons[code]) {
-    throw new DomainError(`La référence « ${code} » est déjà utilisée par un carton.`);
+/**
+ * Écritures équivalentes d'un même code-barres. Un code UPC-A (12 chiffres)
+ * est aussi un EAN-13 commençant par 0 : selon le lecteur, le même carton
+ * peut être lu sous l'une ou l'autre forme.
+ */
+export function codeVariants(code: string): string[] {
+  if (/^\d{12}$/.test(code)) {
+    return [code, `0${code}`];
   }
-  if (state.locations[code]) {
-    throw new DomainError(`La référence « ${code} » est déjà utilisée par un emplacement.`);
+  if (/^0\d{12}$/.test(code)) {
+    return [code, code.slice(1)];
+  }
+  return [code];
+}
+
+export type ExistingCode =
+  | { kind: 'carton'; carton: Carton }
+  | { kind: 'location'; location: StorageLocation };
+
+/** Carton ou emplacement déjà enregistré sous ce code-barres (ou une écriture équivalente). */
+export function findExistingCode(state: InventoryState, raw: string): ExistingCode | null {
+  for (const code of codeVariants(normalizeCode(raw))) {
+    if (state.locations[code]) {
+      return { kind: 'location', location: state.locations[code] };
+    }
+    if (state.cartons[code]) {
+      return { kind: 'carton', carton: state.cartons[code] };
+    }
+  }
+  return null;
+}
+
+/** Cartons portant cette référence produit (plusieurs cartons d'un même produit sont possibles). */
+export function cartonsWithReference(state: InventoryState, raw: string): Carton[] {
+  const wanted = normalizeCode(raw);
+  if (!wanted) {
+    return [];
+  }
+  return Object.values(state.cartons)
+    .filter((carton) => normalizeCode(carton.reference) === wanted)
+    .sort(byCode);
+}
+
+function assertCodeIsFree(state: InventoryState, code: string): void {
+  const existing = findExistingCode(state, code);
+  if (existing?.kind === 'carton') {
+    throw new DomainError(`Le code-barres « ${code} » est déjà relié à la fiche ${cartonTitle(existing.carton)}.`);
+  }
+  if (existing?.kind === 'location') {
+    throw new DomainError(`Le code « ${code} » est déjà utilisé par un emplacement.`);
   }
 }
 
@@ -300,11 +344,7 @@ export function cartonTitle(carton: Carton): string {
 
 /** Carton dont la référence produit correspond exactement, s'il est unique. */
 export function findCartonByReference(state: InventoryState, raw: string): Carton | null {
-  const wanted = normalizeCode(raw);
-  if (!wanted) {
-    return null;
-  }
-  const matches = Object.values(state.cartons).filter((carton) => normalizeCode(carton.reference) === wanted);
+  const matches = cartonsWithReference(state, raw);
   return matches.length === 1 ? matches[0] : null;
 }
 

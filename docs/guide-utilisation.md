@@ -17,6 +17,9 @@ Le code-barres est généré automatiquement ; imprimer l'étiquette depuis la f
 Si le carton porte déjà un code-barres (fabricant, fournisseur), le scanner depuis l'onglet Scanner
 puis choisir « Créer la fiche produit » : ce code-barres est alors relié à la fiche.
 
+Une fois la fiche créée, l'application propose de **choisir son emplacement** dans la liste (ou de
+le scanner ensuite). L'emplacement se change aussi depuis la fiche du carton.
+
 Quand on scanne un carton, l'application affiche sa fiche — référence, nom, quantité, emplacement —
 et non le numéro du code-barres. On peut aussi taper la référence dans le champ de l'onglet Scanner.
 
@@ -32,8 +35,21 @@ Déplacer un carton se fait de la même manière : le dernier emplacement scann�
 
 ## 4. Retrouver un carton
 
-Onglet **Cartons** : taper une partie de la référence, du nom ou de l'emplacement. On peut aussi
-scanner un emplacement pour voir ce qu'il contient.
+La **barre de recherche** en haut de l'écran est disponible partout : taper une partie de la
+référence, du nom du produit, du code-barres ou de l'emplacement. Les résultats listent les produits
+(avec leur emplacement) et les emplacements ; toucher un résultat ouvre sa fiche.
+
+On peut aussi scanner un carton pour afficher son emplacement, ou un emplacement pour voir ce qu'il
+contient.
+
+## Éviter les doublons
+
+- Un code-barres déjà enregistré n'est jamais recréé : en le scannant, l'application affiche la
+  fiche existante et son emplacement.
+- Dans le formulaire de création, un code-barres déjà connu est signalé avec sa fiche, et la
+  création est bloquée ; une référence déjà en stock est signalée avec l'emplacement des cartons
+  concernés (plusieurs cartons d'un même produit restent possibles).
+- Un même code lu en EAN-13 ou en UPC-A (avec ou sans zéro devant) est reconnu comme identique.
 
 ## Matériel
 

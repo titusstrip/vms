@@ -6,7 +6,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import React, { ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, Vibration, View } from 'react-native';
 
-import { addLocation, cartonTitle, cartonsAt, normalizeCode } from '../domain/inventory';
+import { addLocation, cartonTitle, cartonsAt, findExistingCode, normalizeCode } from '../domain/inventory';
 import { EMPTY_SCAN_CONTEXT, ScanContext, ScanOutcome, handleScan } from '../domain/scanFlow';
 import { DEFAULT_STABILIZER_OPTIONS, ScanStabilizer } from '../domain/scanStabilizer';
 import { useInventory } from '../state/InventoryContext';
@@ -82,8 +82,7 @@ export function ScanScreen() {
   /** La caméra envoie des lectures en rafale : seules les lectures confirmées sont traitées. */
   const onCameraRead = ({ data }: { data: string }) => {
     const code = normalizeCode(data);
-    const inventory = stateRef.current;
-    const known = Boolean(inventory.cartons[code] || inventory.locations[code]);
+    const known = findExistingCode(stateRef.current, code) !== null;
     const accepted = stabilizer.push(code, Date.now(), known);
     if (!accepted) {
       return;
@@ -130,7 +129,9 @@ export function ScanScreen() {
 
   const pending = context.pendingCarton ? state.cartons[context.pendingCarton] : undefined;
   const instruction = pending
-    ? `${cartonTitle(pending)} sélectionné : scannez son emplacement.`
+    ? pending.locationCode
+      ? `${cartonTitle(pending)} est en ${pending.locationCode}. Scannez un autre emplacement pour le déplacer.`
+      : `${cartonTitle(pending)} sélectionné : scannez son emplacement.`
     : context.activeLocation
       ? `Emplacement ${context.activeLocation} actif : scannez les cartons à y ranger.`
       : 'Scannez un carton ou un emplacement.';
@@ -222,7 +223,18 @@ export function ScanScreen() {
         {newProductCode !== null ? (
           <CartonForm
             initialCode={newProductCode}
-            onCreated={(code) => {
+            laterLabel="Scanner l'emplacement ensuite"
+            onDone={(code, placed) => {
+              setNewProductCode(null);
+              if (placed) {
+                // Déjà rangé depuis la liste : on affiche la fiche sans attendre d'autre scan.
+                updateContext(EMPTY_SCAN_CONTEXT);
+                setOutcome({ kind: 'carton-selected', carton: stateRef.current.cartons[code] });
+              } else {
+                scan(code);
+              }
+            }}
+            onOpenExisting={(code) => {
               setNewProductCode(null);
               scan(code);
             }}
@@ -258,7 +270,9 @@ function OutcomeCard({
               ? 'Carton rangé'
               : outcome.kind === 'carton-already-there'
                 ? 'Déjà à cet emplacement'
-                : 'Fiche produit'}
+                : carton.locationCode
+                  ? 'Déjà enregistré — voici son emplacement'
+                  : 'Fiche produit — pas encore rangé'}
           </Text>
           <ProductCard carton={carton} />
           {outcome.kind === 'carton-placed' && outcome.from ? (

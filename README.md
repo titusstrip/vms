@@ -15,7 +15,8 @@ carton, sans perdre de temps à chercher.
   en mode clavier (Bluetooth ou USB).
 - **Ranger** : scanner un carton puis son emplacement, ou un emplacement puis tous les cartons à y
   mettre.
-- **Retrouver** un carton par référence, contenu ou emplacement, avec l'historique de ses mouvements.
+- **Retrouver** un carton ou un emplacement avec la barre de recherche globale, sans créer de
+  doublon : un code-barres déjà connu renvoie à sa fiche et à son emplacement.
 - **Sauvegarder / restaurer** l'inventaire dans un fichier.
 
 Les données sont enregistrées sur le téléphone ; l'application fonctionne sans réseau.

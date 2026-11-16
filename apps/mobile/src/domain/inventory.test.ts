@@ -10,7 +10,9 @@ import {
   cartonTitle,
   cartonsAt,
   createEmptyState,
+  cartonsWithReference,
   findCartonByReference,
+  findExistingCode,
   moveCarton,
   movementsOf,
   nextCartonCode,
@@ -170,6 +172,28 @@ describe('fiche produit et couleurs', () => {
   it('ignore une couleur inconnue dans une sauvegarde', () => {
     const bad = JSON.stringify({ version: 1, cartons: {}, locations: { a: { code: 'A-1', color: 'javascript:1' } } });
     assert.equal(parseState(bad).locations['A-1'].color, null);
+  });
+});
+
+describe('codes-barres déjà enregistrés', () => {
+  it('reconnaît un même code lu en UPC-A (12 chiffres) ou en EAN-13 (0 devant)', () => {
+    const state = addCarton(seeded(), { code: '036000291452', reference: 'SODA' }, NOW);
+    const found = findExistingCode(state, '0036000291452');
+    assert.equal(found?.kind === 'carton' && found.carton.code, '036000291452');
+    assert.throws(() => addCarton(state, { code: '0036000291452' }, NOW), /déjà relié à la fiche SODA/);
+  });
+
+  it('distingue carton, emplacement et code inconnu', () => {
+    const state = seeded();
+    assert.equal(findExistingCode(state, 'ctn-000001')?.kind, 'carton');
+    assert.equal(findExistingCode(state, 'a-01-1')?.kind, 'location');
+    assert.equal(findExistingCode(state, 'INCONNU'), null);
+  });
+
+  it('liste les cartons d’une même référence produit', () => {
+    const state = addCarton(seeded(), { code: 'CTN-2', reference: 'hdmi-2m' }, NOW);
+    assert.deepEqual(cartonsWithReference(state, 'HDMI-2M').map((c) => c.code), ['CTN-000001', 'CTN-2']);
+    assert.deepEqual(cartonsWithReference(state, ''), []);
   });
 });
 
